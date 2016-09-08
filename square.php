@@ -29,4 +29,4 @@ function temp_header_js() {
 	
 }
 
-add_action( 'init', 'temp_header_js', 0 );
+//add_action( 'init', 'temp_header_js', 0 );
