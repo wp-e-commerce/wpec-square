@@ -36,6 +36,27 @@ class WPSC_Payment_Gateway_Square_Payments extends WPSC_Payment_Gateway {
 		
 		add_filter( 'wpsc_get_checkout_payment_method_form_args', array( $this, 'te_v2_show_payment_fields' ) );
 		add_filter( 'wpsc_get_checkout_payment_method_form_args', array( $this, 'insert_reference_id_to_form' ) );
+		add_filter(
+			'wpsc_payment_method_form_fields',
+			array( 'WPSC_Payment_Gateway_Square_Payments', 'filter_unselect_default' ), 100 , 1
+		);
+	}
+	
+	/**
+	 * No payment gateway is selected by default
+	 *
+	 * @access public
+	 * @param array $fields
+	 * @return array
+	 *
+	 * @since 3.9
+	 */
+	public static function filter_unselect_default( $fields ) {
+		foreach ( $fields as $i => $field ) {
+			$fields[ $i ][ 'checked' ] = false;
+		}
+
+		return $fields;
 	}
 	
 	public function te_v2_show_payment_fields( $args ) {
@@ -59,7 +80,106 @@ class WPSC_Payment_Gateway_Square_Payments extends WPSC_Payment_Gateway {
 	public function head_script() {
 		?>
 		<script type='text/javascript'>
-			var applicationId = '<?php echo $this->app_id; ?>';
+			jQuery( document ).ready( function( $ ) {
+				$( '.wpsc-checkout-form-button' ).submit( function( e ) {
+
+					e.preventDefault();
+					
+					paymentForm.requestCardNonce();
+					
+					var paymentForm = new SqPaymentForm({
+						applicationId: '<?php echo $this->app_id; ?>',
+						inputClass: 'sq-input',
+						inputStyles: [
+						  {
+							fontSize: '15px'
+						  }
+						],
+						cardNumber: {
+						  elementId: 'square_payments-card-number',
+						},
+						cvv: {
+						  elementId: 'square_payments-card-cvc',
+						},
+						expirationDate: {
+						  elementId: 'square_payments-card-expiry',
+						},
+
+						callbacks: {
+
+						  // Called when the SqPaymentForm completes a request to generate a card
+						  // nonce, even if the request failed because of an error.
+						  cardNonceResponseReceived: function(errors, nonce, cardData) {
+							if (errors) {
+							  console.log("Encountered errors:");
+
+							  // This logs all errors encountered during nonce generation to the
+							  // Javascript console.
+							  errors.forEach(function(error) {
+								console.log('  ' + error.message);
+							  });
+
+							// No errors occurred. Extract the card nonce.
+							} else {
+
+							  // Delete this line and uncomment the lines below when you're ready
+							  // to start submitting nonces to your server.
+							  alert('Nonce received: ' + nonce);
+
+
+							  /*
+								These lines assign the generated card nonce to a hidden input
+								field, then submit that field to your server.
+								Uncomment them when you're ready to test out submitting nonces.
+
+								You'll also need to set the action attribute of the form element
+								at the bottom of this sample, to correspond to the URL you want to
+								submit the nonce to.
+							  */
+							  // document.getElementById('card-nonce').value = nonce;
+							  // document.getElementById('nonce-form').submit();
+
+							}
+						  },
+
+						  unsupportedBrowserDetected: function() {
+							// Fill in this callback to alert buyers when their browser is not supported.
+						  },
+
+						  // Fill in these cases to respond to various events that can occur while a
+						  // buyer is using the payment form.
+						  inputEventReceived: function(inputEvent) {
+							switch (inputEvent.eventType) {
+							  case 'focusClassAdded':
+								// Handle as desired
+								break;
+							  case 'focusClassRemoved':
+								// Handle as desired
+								break;
+							  case 'errorClassAdded':
+								// Handle as desired
+								break;
+							  case 'errorClassRemoved':
+								// Handle as desired
+								break;
+							  case 'cardBrandChanged':
+								// Handle as desired
+								break;
+							  case 'postalCodeChanged':
+								// Handle as desired
+								break;
+							}
+						  },
+
+						  paymentFormLoaded: function() {
+							// Fill in this callback to perform actions after the payment form is
+							// done loading (such as setting the postal code field programmatically).
+							paymentForm.setPostalCode('94103');
+						  }
+						}
+					});
+				});
+			});
 		</script>
 		<?php
 	}
