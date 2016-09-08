@@ -59,13 +59,13 @@ class WPSC_Payment_Gateway_Square_Payments extends WPSC_Payment_Gateway {
 	public function head_script() {
 		?>
 		<script type='text/javascript'>
-
+			var applicationId = '<?php echo $this->app_id; ?>';
 		</script>
 		<?php
 	}
 	
 
-	//This needs to be inserted inside the checkout page
+	// This needs to be inserted inside the checkout page
 	public function insert_reference_id_to_form( $args ) {
 		ob_start();
 		
