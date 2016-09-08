@@ -81,11 +81,8 @@ class WPSC_Payment_Gateway_Square_Payments extends WPSC_Payment_Gateway {
 		?>
 		<script type='text/javascript'>
 			jQuery( document ).ready( function( $ ) {
-				$( '.wpsc-checkout-form-button' ).submit( function( e ) {
-
+				$( '#wpsc-checkout-form' ).submit( function( e ) {
 					e.preventDefault();
-					
-					paymentForm.requestCardNonce();
 					
 					var paymentForm = new SqPaymentForm({
 						applicationId: '<?php echo $this->app_id; ?>',
@@ -104,7 +101,9 @@ class WPSC_Payment_Gateway_Square_Payments extends WPSC_Payment_Gateway {
 						expirationDate: {
 						  elementId: 'square_payments-card-expiry',
 						},
-
+						postalCode: {
+						  elementId: 'square_payments-zip',
+						},
 						callbacks: {
 
 						  // Called when the SqPaymentForm completes a request to generate a card
@@ -136,8 +135,8 @@ class WPSC_Payment_Gateway_Square_Payments extends WPSC_Payment_Gateway {
 								at the bottom of this sample, to correspond to the URL you want to
 								submit the nonce to.
 							  */
-							  // document.getElementById('card-nonce').value = nonce;
-							  // document.getElementById('nonce-form').submit();
+								document.getElementById('square_card_nonce').value = nonce;
+								document.getElementById('wpsc-checkout-form').submit();
 
 							}
 						  },
@@ -174,17 +173,19 @@ class WPSC_Payment_Gateway_Square_Payments extends WPSC_Payment_Gateway {
 						  paymentFormLoaded: function() {
 							// Fill in this callback to perform actions after the payment form is
 							// done loading (such as setting the postal code field programmatically).
-							paymentForm.setPostalCode('94103');
+							// paymentForm.setPostalCode('94103');
 						  }
 						}
 					});
+				
+					
+					paymentForm.requestCardNonce();
 				});
 			});
 		</script>
 		<?php
 	}
 	
-
 	// This needs to be inserted inside the checkout page
 	public function insert_reference_id_to_form( $args ) {
 		ob_start();
@@ -281,6 +282,8 @@ class WPSC_Payment_Gateway_Square_Payments extends WPSC_Payment_Gateway {
 		$status = $this->payment_capture === '' ? WPSC_Purchase_Log::ACCEPTED_PAYMENT : WPSC_Purchase_Log::ORDER_RECEIVED;
 		$order->set( 'processed', $status )->save();
 		
+		var_dump($_POST);
+		exit;
 		$this->order_handler->set_purchase_log( $order->get( 'id' ) );
 	
 		switch ( $this->payment_capture ) {
