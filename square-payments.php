@@ -9,6 +9,7 @@ class WPSC_Payment_Gateway_Square_Payments extends WPSC_Payment_Gateway {
 	private $sandbox;
 	private $payment_capture;
 	private $order_handler;
+	public $location_id;
 	
 	public function __construct() {
 		parent::__construct();
@@ -32,14 +33,48 @@ class WPSC_Payment_Gateway_Square_Payments extends WPSC_Payment_Gateway {
 	public function init() {
 
 		add_action( 'wp_enqueue_scripts', array( $this, 'square_scripts' ) );
-		add_action( 'wp_head'           , array( $this, 'head_script' ) );
+		add_action( 'wp_head'	, array( $this, 'footer_script' ) );
+		
+		// Add extra card field
+		add_action( 'wpsc_default_credit_card_form_end', array( $this, 'insert_extra_card_field_to_form' ) );
+		add_filter( 'wpsc_default_credit_card_form_fields', array( $this, 'remove_default_card_fields' ), 99, 2 );
+		
+		
 		
 		add_filter( 'wpsc_get_checkout_payment_method_form_args', array( $this, 'te_v2_show_payment_fields' ) );
+		// Add hidden field to hold token value
 		add_filter( 'wpsc_get_checkout_payment_method_form_args', array( $this, 'insert_reference_id_to_form' ) );
 		add_filter(
 			'wpsc_payment_method_form_fields',
 			array( 'WPSC_Payment_Gateway_Square_Payments', 'filter_unselect_default' ), 100 , 1
 		);
+	}
+	
+	public function remove_default_card_fields( $fields, $gateway ) {
+		return array();	
+	}
+	
+	public function insert_extra_card_field_to_form ( $gateway ) {
+
+		echo '<p class="form-row form-row-last">
+					<label for="' . esc_attr( $gateway ) . '-card-number">' . __( 'Card Number', 'wp-e-commerce' ) . ' <span class="required">*</span></label>
+					<div id="' . esc_attr( $gateway ) . '-card-number" /></div>
+				</p>';
+
+		echo '<p class="form-row form-row-last">
+					<label for="' . esc_attr( $gateway ) . '-card-expiry">' . __( 'Expiration Date (MM/YY)', 'wp-e-commerce' ) . ' <span class="required">*</span></label>
+					<div id="' . esc_attr( $gateway ) . '-card-expiry" /></div>
+				</p>';
+
+		echo '<p class="form-row form-row-last">
+					<label for="' . esc_attr( $gateway ) . '-card-cvc">' . __( 'Card Code', 'wp-e-commerce' ) . ' <span class="required">*</span></label>
+					<div id="' . esc_attr( $gateway ) . '-card-cvc" /></div>
+				</p>';
+				
+		echo '<p class="form-row form-row-last">
+					<label for="' . esc_attr( $gateway ) . '-card-zip">' . __( 'Card Zip', 'wp-e-commerce' ) . ' <span class="required">*</span></label>
+					<div id="' . esc_attr( $gateway ) . '-card-zip" placeholder="' . esc_attr__( 'Card Zip', 'wp-e-commerce' ) . '" /></div>
+				</p>';
 	}
 	
 	/**
@@ -74,112 +109,84 @@ class WPSC_Payment_Gateway_Square_Payments extends WPSC_Payment_Gateway {
 	 * Add scripts
 	 */
 	public function square_scripts() {
-		wp_enqueue_script( 'squareup', 'https://js.squareup.com/v2/paymentform', 'jquery', false, true );
+		
+		if ( ! wpsc_is_cart() && ! wpsc_is_checkout() ) {
+			return;
+		}
+		
+		wp_enqueue_script( 'squareup', 'https://js.squareup.com/v2/paymentform' );
 	}
 	
-	public function head_script() {
+	public function footer_script() {
+		
+		if ( ! wpsc_is_cart() && ! wpsc_is_checkout() ) {
+			return;
+		}
+		
+		require_once( WPSC_TE_V2_CLASSES_PATH . '/checkout-wizard.php' );
+		$wizard = WPSC_Checkout_Wizard::get_instance();
+		
+		if ( $wizard->active_step != 'payment' ) {
+			return;
+		}
+		
 		?>
 		<script type='text/javascript'>
+			var sqPaymentForm = new SqPaymentForm({
+				applicationId: '<?php echo $this->app_id; ?>',
+				inputClass: 'input-square-card-data',
+				inputStyles: [
+				  {
+					fontSize: '15px'
+				  }
+				],
+				cardNumber: {
+				  elementId: 'square_payments-card-number',
+				},
+				cvv: {
+				  elementId: 'square_payments-card-cvc',
+				},
+				expirationDate: {
+				  elementId: 'square_payments-card-expiry',
+				},
+				postalCode: {
+				  elementId: 'square_payments-card-zip',
+				},
+				callbacks: {
+
+				  // Called when the SqPaymentForm completes a request to generate a card
+				  // nonce, even if the request failed because of an error.
+				  cardNonceResponseReceived: function(errors, nonce, cardData) {
+					if (errors) {
+					  console.log("Encountered errors:");
+
+					  // This logs all errors encountered during nonce generation to the
+					  // Javascript console.
+					  errors.forEach(function(error) {
+						console.log('  ' + error.message);
+					  });
+						return;
+					// No errors occurred. Extract the card nonce.
+					} else {
+						//alert('Nonce received! ' + nonce + ' ' + JSON.stringify(cardData));
+						var nonceField = document.getElementById('square_card_nonce');
+						nonceField.value = nonce;
+						document.getElementById('wpsc-checkout-form').submit();
+					}
+				  },
+
+				  paymentFormLoaded: function() {
+					// Fill in this callback to perform actions after the payment form is
+					// done loading (such as setting the postal code field programmatically).
+					// sqPaymentForm.setPostalCode('94103');
+				  }
+				}
+			});
+		
 			jQuery( document ).ready( function( $ ) {
 				$( '#wpsc-checkout-form' ).submit( function( e ) {
 					e.preventDefault();
-					
-					var paymentForm = new SqPaymentForm({
-						applicationId: '<?php echo $this->app_id; ?>',
-						inputClass: 'sq-input',
-						inputStyles: [
-						  {
-							fontSize: '15px'
-						  }
-						],
-						cardNumber: {
-						  elementId: 'square_payments-card-number',
-						},
-						cvv: {
-						  elementId: 'square_payments-card-cvc',
-						},
-						expirationDate: {
-						  elementId: 'square_payments-card-expiry',
-						},
-						postalCode: {
-						  elementId: 'square_payments-zip',
-						},
-						callbacks: {
-
-						  // Called when the SqPaymentForm completes a request to generate a card
-						  // nonce, even if the request failed because of an error.
-						  cardNonceResponseReceived: function(errors, nonce, cardData) {
-							if (errors) {
-							  console.log("Encountered errors:");
-
-							  // This logs all errors encountered during nonce generation to the
-							  // Javascript console.
-							  errors.forEach(function(error) {
-								console.log('  ' + error.message);
-							  });
-
-							// No errors occurred. Extract the card nonce.
-							} else {
-
-							  // Delete this line and uncomment the lines below when you're ready
-							  // to start submitting nonces to your server.
-							  alert('Nonce received: ' + nonce);
-
-
-							  /*
-								These lines assign the generated card nonce to a hidden input
-								field, then submit that field to your server.
-								Uncomment them when you're ready to test out submitting nonces.
-
-								You'll also need to set the action attribute of the form element
-								at the bottom of this sample, to correspond to the URL you want to
-								submit the nonce to.
-							  */
-								document.getElementById('square_card_nonce').value = nonce;
-								document.getElementById('wpsc-checkout-form').submit();
-
-							}
-						  },
-
-						  unsupportedBrowserDetected: function() {
-							// Fill in this callback to alert buyers when their browser is not supported.
-						  },
-
-						  // Fill in these cases to respond to various events that can occur while a
-						  // buyer is using the payment form.
-						  inputEventReceived: function(inputEvent) {
-							switch (inputEvent.eventType) {
-							  case 'focusClassAdded':
-								// Handle as desired
-								break;
-							  case 'focusClassRemoved':
-								// Handle as desired
-								break;
-							  case 'errorClassAdded':
-								// Handle as desired
-								break;
-							  case 'errorClassRemoved':
-								// Handle as desired
-								break;
-							  case 'cardBrandChanged':
-								// Handle as desired
-								break;
-							  case 'postalCodeChanged':
-								// Handle as desired
-								break;
-							}
-						  },
-
-						  paymentFormLoaded: function() {
-							// Fill in this callback to perform actions after the payment form is
-							// done loading (such as setting the postal code field programmatically).
-							// paymentForm.setPostalCode('94103');
-						  }
-						}
-					});
-				
-					
-					paymentForm.requestCardNonce();
+					sqPaymentForm.requestCardNonce();
 				});
 			});
 		</script>
@@ -282,8 +289,6 @@ class WPSC_Payment_Gateway_Square_Payments extends WPSC_Payment_Gateway {
 		$status = $this->payment_capture === '' ? WPSC_Purchase_Log::ACCEPTED_PAYMENT : WPSC_Purchase_Log::ORDER_RECEIVED;
 		$order->set( 'processed', $status )->save();
 		
-		var_dump($_POST);
-		exit;
 		$this->order_handler->set_purchase_log( $order->get( 'id' ) );
 	
 		switch ( $this->payment_capture ) {
@@ -322,9 +327,9 @@ class WPSC_Payment_Gateway_Square_Payments extends WPSC_Payment_Gateway {
 				'buyer_email_address'	=> $this->checkout_data->get( 'billingemail' ),
 				# Monetary amounts are specified in the smallest unit of the applicable currency.
 				# This amount is in cents. It's also hard-coded for $1.00, which isn't very useful.
-				'amount_money' 		=> array (
-					'amount'	=> $order->get( 'totalprice' ),
-					'currency'	=> strtoupper( $this->get_currency_code() )
+				'amount_money' 	=> array (
+					'amount'	=> floatval( $order->get( 'totalprice' ) ) * 100,
+					'currency'	=> strtoupper( $this->get_currency_code() ),
 				),
 				'billing_address'	=> array (
 					'address_line_1'	=> $this->checkout_data->get( 'billingaddress' ),
@@ -337,12 +342,9 @@ class WPSC_Payment_Gateway_Square_Payments extends WPSC_Payment_Gateway {
 				'idempotency_key' 	=> uniqid(),
 				'delay_capture'		=> $preauth,
 			);
+			
+			$response = $this->execute( "locations/{$this->location_id}/transactions", $params );
 
-			$response = $this->execute( 'locations/{$this->location_id}/transactions', $params );
-			
-			var_dump($response);
-			exit;
-			
 			if ( is_wp_error( $response ) ) {
 				throw new Exception( $response->get_error_message() );
 			}
@@ -351,6 +353,7 @@ class WPSC_Payment_Gateway_Square_Payments extends WPSC_Payment_Gateway {
 			} else {
 				return false;
 			}
+			
 			// Store transaction ID in the order
 			$order->set( 'sq_transactionid', $transaction_id )->save();
 			$order->set( 'transactid'      , $transaction_id )->save();
@@ -379,8 +382,7 @@ class WPSC_Payment_Gateway_Square_Payments extends WPSC_Payment_Gateway {
 		);
 		$request  = $type == 'GET' ? wp_safe_remote_get( $endpoint, $args ) : wp_safe_remote_post( $endpoint, $args );
         $response = wp_remote_retrieve_body( $request );
-			var_dump($response);
-			exit;
+
 		if ( ! is_wp_error( $request ) ) {
 			$response_object = array();
 			$response_object['ResponseBody'] = json_decode( $response );
@@ -393,8 +395,9 @@ class WPSC_Payment_Gateway_Square_Payments extends WPSC_Payment_Gateway {
 
 class WPSC_Square_Payments_Order_Handler {
 	private static $instance;
-	private $log;
-	private $gateway;
+	public $log;
+	public $gateway;
+	
 	public function __construct( &$gateway ) {
 		$this->log     = $gateway->purchase_log;
 		$this->gateway = $gateway;
@@ -453,6 +456,7 @@ class WPSC_Square_Payments_Order_Handler {
 	function meta_box( $log_id ) {
 		$this->set_purchase_log( $log_id );
 		$gateway = $this->log->get( 'gateway' );
+		
 		if ( $gateway == 'square-payments' ) {
 			$this->authorization_box();
 		}
@@ -466,9 +470,11 @@ class WPSC_Square_Payments_Order_Handler {
 	public function authorization_box() {
 		$actions  = array();
 		$order_id = $this->log->get( 'id' );
+		
 		// Get ids
 		$sq_transactionid 	= $this->log->get( 'sq_transactionid' );
 		$sq_order_status	= $this->log->get( 'sq_order_status' );
+		
 		//Don't change order status if a refund has been requested
 		$sq_refund_set = wpsc_get_purchase_meta( $order_id, 'square_refunded', true );
 		$order_info    = $this->refresh_transaction_info( $sq_transactionid, ! (bool) $sq_refund_set );
@@ -561,7 +567,8 @@ class WPSC_Square_Payments_Order_Handler {
      */
 	public function refresh_transaction_info( $transaction_id, $update = true ) {
 		if ( $this->log->get( 'gateway' ) == 'square-payments' ) {
-			$response = $this->gateway->execute( 'locations/{$this->location_id}/transactions/{$transaction_id}', null, 'GET' );
+			echo "locations/{$this->gateway->location_id}/transactions/{$transaction_id}";
+			$response = $this->gateway->execute( "locations/{$this->gateway->location_id}/transactions/$transaction_id", null, 'GET' );
 			if ( is_wp_error( $response ) ) {
 				throw new Exception( $response->get_error_message() );
 			}
@@ -598,7 +605,7 @@ class WPSC_Square_Payments_Order_Handler {
      */
     public function void_payment( $transaction_id ) {
 		if ( $this->log->get( 'gateway' ) == 'square-payments' ) {
-			$response = $this->gateway->execute( 'locations/{$this->location_id}/transactions/{$transaction_id}/void', $params, null );
+			$response = $this->gateway->execute( "locations/{$this->location_id}/transactions/{$transaction_id}/void", $params, null );
 			
 			if ( is_wp_error( $response ) ) {
 				throw new Exception( $response->get_error_message() );
@@ -623,12 +630,12 @@ class WPSC_Square_Payments_Order_Handler {
 				# Monetary amounts are specified in the smallest unit of the applicable currency.
 				# This amount is in cents. It's also hard-coded for $1.00, which isn't very useful.
 				'amount_money' 		=> array (
-					'amount'	=> $order->get( 'totalprice' ),
+					'amount'	=> floatval( $order->get( 'totalprice' ) ) * 100,
 					'currency'	=> strtoupper( $this->get_currency_code() ),
 				),				
 			);
 			
-			$response = $this->gateway->execute( 'locations/{$this->location_id}/transactions/{$transaction_id}/refund', $params );
+			$response = $this->gateway->execute( "locations/{$this->location_id}/transactions/{$transaction_id}/refund", $params );
 			
 			if ( is_wp_error( $response ) ) {
 				throw new Exception( $response->get_error_message() );
@@ -649,7 +656,7 @@ class WPSC_Square_Payments_Order_Handler {
      */
     public function capture_payment( $transaction_id ) {
 		if ( $this->log->get( 'gateway' ) == 'square-payments' ) {
-			$response = $this->gateway->execute( 'locations/{$this->location_id}/transactions/{$transaction_id}/capture', null );
+			$response = $this->gateway->execute( "locations/{$this->location_id}/transactions/{$transaction_id}/capture", null );
 			
 			if ( is_wp_error( $response ) ) {
 				throw new Exception( $response->get_error_message() );
