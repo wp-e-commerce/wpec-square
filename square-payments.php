@@ -350,17 +350,11 @@ class WPSC_Payment_Gateway_Square_Payments extends WPSC_Payment_Gateway {
 	 * @return void
 	 */
 	private function handle_declined_transaction( $order ) {
-		$reason_code = $order->get( 'amazon-reason-code' );
+		$error_message = $order->get( 'square-status' );
 
-		if ( 'InvalidPaymentMethod' == $reason_code ) {
-			$message = __( 'Selected payment method was not valid.  Please select a valid payment method.', 'wp-e-commerce' );
-			$url     = add_query_arg( $_GET, wpsc_get_checkout_url( 'shipping-and-billing' ) );
-		} else {
-			$message = __( 'It is not currently possible to complete this transaction with Amazon Payments. Please contact the store administrator or try again later.', 'wp-e-commerce' );
-			$url     = wpsc_get_cart_url();
-		}
+		$url     = wpsc_get_cart_url();
 
-		WPSC_Message_Collection::get_instance()->add( $message, 'error', 'main', 'flash' );
+		WPSC_Message_Collection::get_instance()->add( $error_message, 'error', 'main', 'flash' );
 		wp_safe_redirect( $url );
 
 		exit;
