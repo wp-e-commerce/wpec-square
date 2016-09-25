@@ -315,7 +315,6 @@ class WPSC_Payment_Gateway_Square_Payments extends WPSC_Payment_Gateway {
 					$order->set( 'square-status', __( 'Square order opened. Capture the payment below. Authorized payments must be captured within 6 days.', 'wp-e-commerce' ) )->save();
 				} else {
 					$order->set( 'processed', WPSC_Purchase_Log::PAYMENT_DECLINED )->save();
-					$order->set( 'square-status', __( 'Unable to authorize funds with Square.', 'wp-e-commerce' ) )->save();
 					$this->handle_declined_transaction( $order );
 				}
 			break;
@@ -327,7 +326,6 @@ class WPSC_Payment_Gateway_Square_Payments extends WPSC_Payment_Gateway {
 					$order->set( 'square-status', __( 'Square order completed.  Funds have been authorized and captured.', 'wp-e-commerce' ) );
 				} else {
 					$order->set( 'processed'      , WPSC_Purchase_Log::PAYMENT_DECLINED );
-					$order->set( 'square-status', __( 'Unable to authorize funds with Square.', 'wp-e-commerce' ) );
 					$this->handle_declined_transaction( $order );
 				}
 			break;
@@ -388,8 +386,8 @@ class WPSC_Payment_Gateway_Square_Payments extends WPSC_Payment_Gateway {
 			
 			$response = $this->execute( "locations/{$this->location_id}/transactions", $params );
 
-			if( $response->errors ) {
-				$order->set( 'square-status', $response->errors[0]->detail );
+			if( $response['ResponseBody']->errors ) {
+				$order->set( 'square-status', $response['ResponseBody']->errors[0]->detail );
 				return false;
 			}
 			
