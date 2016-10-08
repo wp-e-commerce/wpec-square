@@ -386,7 +386,7 @@ class WPSC_Payment_Gateway_Square_Payments extends WPSC_Payment_Gateway {
 			
 			$response = $this->execute( "locations/{$this->location_id}/transactions", $params );
 
-			if( $response['ResponseBody']->errors ) {
+			if( isset( $response['ResponseBody']->errors ) ) {
 				$order->set( 'square-status', $response['ResponseBody']->errors[0]->detail );
 				return false;
 			}
