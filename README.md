@@ -11,4 +11,4 @@ Access Token: sq0atb-HntcBZnYFuZ7z-whkZkrow
 Location ID: CBASEJnN5h0HINzzqUWMfV3H_sQ
 Sandbox mode: enabled
 ```
-
+Test cards can be found here https://docs.connect.squareup.com/articles/using-sandbox/
