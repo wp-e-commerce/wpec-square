@@ -1,226 +1,56 @@
 <?php
-class WPSC_Payment_Gateway_Square_Payments extends WPSC_Payment_Gateway {
+class WPSC_Payment_Gateway_WorldPay extends WPSC_Payment_Gateway {
 
 	private $endpoints = array(
-		'sandbox' => 'https://connect.squareup.com/v2/',
-		'production' => 'https://connect.squareup.com/v2/',
+		'sandbox' => 'https://gwapi.demo.securenet.com/api/',
+		'production' => 'https://gwapi.securenet.com/api/',
 	);
-	private $endpoint;
-	private $sandbox;
+
+	private $auth;
 	private $payment_capture;
 	private $order_handler;
-	public $location_id;
-	
+	private $secure_net_id;
+	private $secure_key;
+	private $public_key;
+	private $endpoint;
+	private $sandbox;
+
+	/**
+	 * Constructor of WorldPay Payment Gateway
+	 *
+	 * @access public
+	 * @since 3.9
+	 */
 	public function __construct() {
+
 		parent::__construct();
-		
-		$this->title 			= __( 'Square', 'wpsc' );
-		$this->supports 		= array( 'default_credit_card_form', 'tev2' );
+
+		$this->title = __( 'WorldPay Payment Gateway', 'wp-e-commerce' );
+		$this->supports = array( 'default_credit_card_form', 'tev1' );
+
+		$this->order_handler	= WPSC_WorldPay_Payments_Order_Handler::get_instance( $this );
+
+		// Define user set variables
+		$this->secure_net_id	= $this->setting->get( 'secure_net_id' );
+		$this->secure_key  		= $this->setting->get( 'secure_key' );
+		$this->public_key  		= $this->setting->get( 'public_key' );
 		$this->sandbox			= $this->setting->get( 'sandbox_mode' ) == '1' ? true : false;
 		$this->endpoint			= $this->sandbox ? $this->endpoints['sandbox'] : $this->endpoints['production'];
 		$this->payment_capture 	= $this->setting->get( 'payment_capture' ) !== null ? $this->setting->get( 'payment_capture' ) : '';
-		$this->order_handler	= WPSC_Square_Payments_Order_Handler::get_instance( $this );
-		
-		// Define user set variables
-		$this->app_id			= $this->setting->get( 'app_id' );
-		$this->location_id		= $this->setting->get( 'location_id' );
-		$this->acc_token  		= $this->setting->get( 'acc_token' );
+		$this->auth				= 'Basic ' . base64_encode( $this->setting->get( 'secure_net_id' ) . ':' . $this->setting->get( 'secure_key' ) );
 	}
 
-	public function init() {
-		add_action( 'wp_enqueue_scripts', array( $this, 'square_scripts' ) );
-		add_action( 'wp_head'	, array( $this, 'footer_script' ) );
-		
-		// Add extra card field
-		add_action( 'wpsc_default_credit_card_form_end', array( $this, 'insert_extra_card_field_to_form' ) );
-		add_filter( 'wpsc_default_credit_card_form_fields', array( $this, 'remove_default_card_fields' ), 99, 2 );
-		
-		add_filter( 'wpsc_get_checkout_payment_method_form_args', array( $this, 'te_v2_show_payment_fields' ) );
-		// Add hidden field to hold token value
-		add_filter( 'wpsc_get_checkout_payment_method_form_args', array( $this, 'insert_reference_id_to_form' ) );
-		add_filter(
-			'wpsc_payment_method_form_fields',
-			array( 'WPSC_Payment_Gateway_Square_Payments', 'filter_unselect_default' ), 100 , 1
-		);
-	}
-	
 	/**
-	 * Load gateway only if PHP 5.3+ and TEv2.
+	 * Load gateway only if TEv2 for now
 	 *
 	 * @return bool Whether or not to load gateway.
 	 */
-	public static function load() {
-		return version_compare( phpversion(), '5.3', '>=' ) && function_exists( '_wpsc_get_current_controller' );
-	}
-	
-	public function remove_default_card_fields( $fields, $gateway ) {
-		return array();	
-	}
-	
-	public function insert_extra_card_field_to_form ( $gateway ) {
 
-		echo '<p class="form-row form-row-last">
-					<label for="' . esc_attr( $gateway ) . '-card-number">' . __( 'Card Number', 'wp-e-commerce' ) . ' <span class="required">*</span></label>
-					<div id="' . esc_attr( $gateway ) . '-card-number" /></div>
-				</p>';
-
-		echo '<p class="form-row form-row-last">
-					<label for="' . esc_attr( $gateway ) . '-card-expiry">' . __( 'Expiration Date (MM/YY)', 'wp-e-commerce' ) . ' <span class="required">*</span></label>
-					<div id="' . esc_attr( $gateway ) . '-card-expiry" /></div>
-				</p>';
-
-		echo '<p class="form-row form-row-last">
-					<label for="' . esc_attr( $gateway ) . '-card-cvc">' . __( 'Card Code', 'wp-e-commerce' ) . ' <span class="required">*</span></label>
-					<div id="' . esc_attr( $gateway ) . '-card-cvc" /></div>
-				</p>';
-				
-		echo '<p class="form-row form-row-last">
-					<label for="' . esc_attr( $gateway ) . '-card-zip">' . __( 'Card Zip', 'wp-e-commerce' ) . ' <span class="required">*</span></label>
-					<div id="' . esc_attr( $gateway ) . '-card-zip" placeholder="' . esc_attr__( 'Card Zip', 'wp-e-commerce' ) . '" /></div>
-				</p>';
-	}
-	
 	/**
-	 * No payment gateway is selected by default
-	 *
-	 * @access public
-	 * @param array $fields
-	 * @return array
+	 * Settings Form Template
 	 *
 	 * @since 3.9
 	 */
-	public static function filter_unselect_default( $fields ) {
-		foreach ( $fields as $i => $field ) {
-			$fields[ $i ][ 'checked' ] = false;
-		}
-
-		return $fields;
-	}
-	
-	public function te_v2_show_payment_fields( $args ) {
-		$default = '<div class="wpsc-form-actions">';
-		ob_start();
-		$this->payment_fields();
-		$fields = ob_get_clean();
-		$args['before_form_actions'] = $fields . $default;
-		return $args;
-	}
-	
-	//$this->payment_fields to show the card fields but where ?
-	
-	/**
-	 * Add scripts
-	 */
-	public function square_scripts() {
-		if ( ! wpsc_is_cart() && ! wpsc_is_checkout() ) {
-			return;
-		}
-		
-		wp_enqueue_script( 'squareup', 'https://js.squareup.com/v2/paymentform' );
-	}
-	
-	public function footer_script() {
-		if ( ! wpsc_is_cart() && ! wpsc_is_checkout() ) {
-			return;
-		}
-		
-		require_once( WPSC_TE_V2_CLASSES_PATH . '/checkout-wizard.php' );
-		$wizard = WPSC_Checkout_Wizard::get_instance();
-		
-		if ( $wizard->active_step != 'payment' ) {
-			return;
-		}
-		
-		?>
-		<style type="text/css">
-		.square-card {
-		}
-		.square-card--error {
-		  /* Indicates how form inputs should appear when they contain invalid values */
-		  outline: 5px auto rgb(255, 97, 97);
-		}
-		</style>
-		
-		<script type='text/javascript'>
-			var alerts = '';
-			var sqPaymentForm = new SqPaymentForm({
-				applicationId: '<?php echo $this->app_id; ?>',
-				inputClass: 'square-card',
-				inputStyles: [
-				  {
-					fontSize: '15px'
-				  }
-				],
-				cardNumber: {
-				  elementId: 'square_payments-card-number',
-				},
-				cvv: {
-				  elementId: 'square_payments-card-cvc',
-				},
-				expirationDate: {
-				  elementId: 'square_payments-card-expiry',
-				},
-				postalCode: {
-				  elementId: 'square_payments-card-zip',
-				},
-				callbacks: {
-
-				  // Called when the SqPaymentForm completes a request to generate a card
-				  // nonce, even if the request failed because of an error.
-				  cardNonceResponseReceived: function(errors, nonce, cardData) {
-					if (errors) {
-					  console.log("Encountered errors:");
-
-					  // This logs all errors encountered during nonce generation to the
-					  // Javascript console.
-					  errors.forEach(function(error) {
-						alerts += error.message + '\n';
-						console.log('  ' + error.message);
-					  });
-						alert(alerts);
-						return;
-					// No errors occurred. Extract the card nonce.
-					} else {
-						//alert('Nonce received! ' + nonce + ' ' + JSON.stringify(cardData));
-						var nonceField = document.getElementById('square_card_nonce');
-						nonceField.value = nonce;
-						document.getElementById('wpsc-checkout-form').submit();
-					}
-				  },
-
-				  paymentFormLoaded: function() {
-					// Fill in this callback to perform actions after the payment form is
-					// done loading (such as setting the postal code field programmatically).
-					// sqPaymentForm.setPostalCode('94103');
-				  }
-				}
-			});
-		
-			jQuery( document ).ready( function( $ ) {
-				$( '#wpsc-checkout-form' ).submit( function( e ) {
-					e.preventDefault();
-					sqPaymentForm.requestCardNonce();
-				});
-			});
-		</script>
-		<?php
-	}
-	
-	// This needs to be inserted inside the checkout page
-	public function insert_reference_id_to_form( $args ) {
-		ob_start();
-		echo '<input type="hidden" id="square_card_nonce" name="square_card_nonce" value="" />';
-		
-		$id = ob_get_clean();
-		if ( isset( $args['before_form_actions'] ) ) {
-			$args['before_form_actions'] .= $id;
-		} else {
-			$args['before_form_actions']  = $id;
-		}
-		return $args;
-	}
-	
-	
 	public function setup_form() {
 ?>
 		<!-- Account Credentials -->
@@ -231,29 +61,29 @@ class WPSC_Payment_Gateway_Square_Payments extends WPSC_Payment_Gateway {
 		</tr>
 		<tr>
 			<td>
-				<label for="wpsc-worldpay-secure-net-id"><?php _e( 'Application ID', 'wp-e-commerce' ); ?></label>
+				<label for="wpsc-worldpay-secure-net-id"><?php _e( 'SecureNet ID', 'wp-e-commerce' ); ?></label>
 			</td>
 			<td>
-				<input type="text" name="<?php echo esc_attr( $this->setting->get_field_name( 'app_id' ) ); ?>" value="<?php echo esc_attr( $this->setting->get( 'app_id' ) ); ?>" id="wpsc-worldpay-secure-net-id" />
-				<br><span class="small description"><?php _e( 'Application ID.', 'wp-e-commerce' ); ?></span>
-			</td>
-		</tr>
-		<tr>
-			<td>
-				<label for="wpsc-worldpay-secure-key"><?php _e( 'Access Token', 'wp-e-commerce' ); ?></label>
-			</td>
-			<td>
-				<input type="text" name="<?php echo esc_attr( $this->setting->get_field_name( 'acc_token' ) ); ?>" value="<?php echo esc_attr( $this->setting->get( 'acc_token' ) ); ?>" id="wpsc-worldpay-secure-key" />
-				<br><span class="small description"><?php _e( 'Access token.', 'wp-e-commerce' ); ?></span>
+				<input type="text" name="<?php echo esc_attr( $this->setting->get_field_name( 'secure_net_id' ) ); ?>" value="<?php echo esc_attr( $this->setting->get( 'secure_net_id' ) ); ?>" id="wpsc-worldpay-secure-net-id" />
+				<br><span class="small description"><?php _e( 'The SecureNet ID can be obtained from the email that you should have received during the sign-up process.', 'wp-e-commerce' ); ?></span>
 			</td>
 		</tr>
 		<tr>
 			<td>
-				<label for="wpsc-worldpay-secure-key"><?php _e( 'Location ID', 'wp-e-commerce' ); ?></label>
+				<label for="wpsc-worldpay-secure-key"><?php _e( 'Secure Key', 'wp-e-commerce' ); ?></label>
 			</td>
 			<td>
-				<input type="text" name="<?php echo esc_attr( $this->setting->get_field_name( 'location_id' ) ); ?>" value="<?php echo esc_attr( $this->setting->get( 'location_id' ) ); ?>" id="wpsc-worldpay-secure-key" />
-				<br><span class="small description"><?php _e( 'Store Location ID.', 'wp-e-commerce' ); ?></span>
+				<input type="text" name="<?php echo esc_attr( $this->setting->get_field_name( 'secure_key' ) ); ?>" value="<?php echo esc_attr( $this->setting->get( 'secure_key' ) ); ?>" id="wpsc-worldpay-secure-key" />
+				<br><span class="small description"><?php _e( 'You can obtain the Secure Key by signing into the Virtual Terminal with the login credentials that you were emailed to you during the sign-up process. You will then need to navigate to Settings and click on the Obtain Secure Key link.', 'wp-e-commerce' ); ?></span>
+			</td>
+		</tr>
+		<tr>
+			<td>
+				<label for="wpsc-worldpay-public-key"><?php _e( 'Public Key', 'wp-e-commerce' ); ?></label>
+			</td>
+			<td>
+				<input type="text" name="<?php echo esc_attr( $this->setting->get_field_name( 'public_key' ) ); ?>" value="<?php echo esc_attr( $this->setting->get( 'public_key' ) ); ?>" id="wpsc-worldpay-public-key" />
+				<br><span class="small description"><?php _e( 'You can obtain the Public Key by signing into the Virtual Terminal. You will then need to navigate to Settings and click on the Obtain Public Key link.', 'wp-e-commerce' ); ?></span>
 			</td>
 		</tr>
 		<tr>
@@ -293,199 +123,382 @@ class WPSC_Payment_Gateway_Square_Payments extends WPSC_Payment_Gateway {
 		</tr>
 <?php
 	}
-	
-	public function process() {
-		
-		$order = $this->purchase_log;
-		$status = $this->payment_capture === '' ? WPSC_Purchase_Log::ACCEPTED_PAYMENT : WPSC_Purchase_Log::ORDER_RECEIVED;
-		
-		// Check card token created, if not error out ?
-		$card_token = isset( $_POST['square_card_nonce'] ) ? sanitize_text_field( $_POST['square_card_nonce'] ) : '';
-
-		$order->set( 'processed', $status )->save();
-	
-		$this->order_handler->set_purchase_log( $order->get( 'id' ) );
-	
-		switch ( $this->payment_capture ) {
-			case 'authorize' :
-				// Authorize only
-				$result = $this->capture_payment( $card_token, true );
-				if ( $result ) {
-					// Mark as on-hold
-					$order->set( 'square-status', __( 'Square order opened. Capture the payment below. Authorized payments must be captured within 6 days.', 'wp-e-commerce' ) )->save();
-				} else {
-					$order->set( 'processed', WPSC_Purchase_Log::PAYMENT_DECLINED )->save();
-					$this->handle_declined_transaction( $order );
-				}
-			break;
-			default:
-				// Capture
-				$result = $this->capture_payment( $card_token );
-				if ( $result ) {
-					// Payment complete
-					$order->set( 'square-status', __( 'Square order completed.  Funds have been authorized and captured.', 'wp-e-commerce' ) );
-				} else {
-					$order->set( 'processed'      , WPSC_Purchase_Log::PAYMENT_DECLINED );
-					$this->handle_declined_transaction( $order );
-				}
-			break;
-		}
-		
-		$order->save();
-		$this->go_to_transaction_results();
-	}
 
 	/**
-	 * Handles declined transactions from Square.
-	 *
-	 * On the front-end, if a transaction is declined due to an invalid payment method, the user needs
-	 * to be returned to the payment page to select a different method.
-	 *
-	 *
-	 * @since  4.0
-	 *
-	 * @param  WPSC_Purchase_Log $order Current purchase log for transaction.
-	 * @return void
+	 * Add scripts
 	 */
-	private function handle_declined_transaction( $order ) {
-		$error_message = $order->get( 'square-status' );
+	public function scripts() {
 
-		$url     = wpsc_get_cart_url();
-
-		WPSC_Message_Collection::get_instance()->add( $error_message, 'error', 'main', 'flash' );
-		wp_safe_redirect( $url );
-
-		exit;
+		$js = $this->sandbox ? 'demo.' : '';
+		wp_enqueue_script( 'worldpay_payos', 'https://gwapi.'.$js.'securenet.com/v1/PayOS.js', 'jquery', false, true );
 	}
-	
-	public function capture_payment( $card_token, $preauth = false ) {
-		if ( $this->purchase_log->get( 'gateway' ) == 'square-payments' ) {
-			$order = $this->purchase_log;
-			
-			$params = array(
-				'card_nonce' 		=> $card_token,
-				'reference_id'		=> $order->get( 'id' ),
-				'buyer_email_address'	=> $this->checkout_data->get( 'billingemail' ),
-				# Monetary amounts are specified in the smallest unit of the applicable currency.
-				# This amount is in cents. It's also hard-coded for $1.00, which isn't very useful.
-				'amount_money' 	=> array (
-					'amount'	=> floatval( $order->get( 'totalprice' ) ) * 100,
-					'currency'	=> strtoupper( $this->get_currency_code() ),
-				),
-				'billing_address'	=> array (
-					'address_line_1'	=> $this->checkout_data->get( 'billingaddress' ),
-					'locality'			=> $this->checkout_data->get( 'billingcity' ), // City
-					'administrative_district_level_1'	=> $this->checkout_data->get( 'billingstate' ), // State
-					'postal_code'		=> $this->checkout_data->get( 'billingpostcode' ), // Zip
-					'country' 			=> $this->checkout_data->get( 'billingcountry' ), // The address's country, in ISO 3166-1-alpha-2 format.
-					
-				),
-				'idempotency_key' 	=> uniqid(),
-				'delay_capture'		=> $preauth,
-			);
-			
-			$response = $this->execute( "locations/{$this->location_id}/transactions", $params );
 
-			if( isset( $response['ResponseBody']->errors ) ) {
-				$order->set( 'square-status', $response['ResponseBody']->errors[0]->detail );
+	public function head_script() {
+		?>
+		<script type='text/javascript'>
+
+			jQuery( document ).ready( function( $ ) {
+				$( '.wpsc_checkout_forms' ).submit( function( e ) {
+
+					e.preventDefault();
+
+					var response = tokenizeCard(
+						{
+							"publicKey": '<?php echo $this->public_key; ?>',
+							"card": {
+								"number": document.getElementById('card_number').value,
+								"cvv": document.getElementById('card_code').value,
+							"expirationDate": document.getElementById('card_expiry_month').value + '/' + document.getElementById('card_expiry_year').value,
+								"firstName": $( 'input[title="billingfirstname"]' ).val(),
+								"lastName": $( 'input[title="billinglastname"]' ).val(),
+								"address": {
+									"line1": $( 'textarea[title="billingaddress"]' ).text(),
+									"city": $( 'input[title="billingcity"]' ).val(),
+									"state": $( 'input[title="billingstate"]' ).val(),
+									"zip": $( 'input[title="billingpostcode"]' ).val()
+								}
+							},
+							"addToVault": false,
+							"developerApplication": {
+								"developerId": 10000644,
+								"version": '1.2'
+
+							}
+						}
+					).done(function (result) {
+
+						var responseObj = $.parseJSON(JSON.stringify(result));
+
+						if (responseObj.success) {
+
+							var $form = $( '.wpsc_checkout_forms' );
+
+							var token = responseObj.token;
+
+							$("#worldpay_pay_token").val(token);
+							// and submit
+							$form.get(0).submit();
+
+							// do something with responseObj.token
+						} else {
+							alert("token was not created");
+							// do something with responseObj.message
+
+						}
+
+					}).fail(function ( response ) {
+						$( 'input[type="submit"]', this ).prop( { 'disabled': false } );
+						console.log( response );
+					});
+				});
+
+			});
+
+		</script>
+		<?php
+	}
+
+	public function te_v1_insert_hidden_field() {
+		echo '<input type="hidden" id="worldpay_pay_token" name="worldpay_pay_token" value="" />';
+	}
+
+	public function init() {
+		parent::init();
+		add_action( 'wp_enqueue_scripts', array( $this, 'scripts' ) );
+		add_action( 'wp_head'           , array( $this, 'head_script' ) );
+
+		add_filter( 'wpsc_get_checkout_payment_method_form_args', array( $this, 'te_v2_show_payment_fields' ) );
+		add_filter( 'wpsc_get_checkout_payment_method_form_args', array( $this, 'insert_reference_id_to_form' ) );
+		add_action( 'wpsc_inside_shopping_cart', array( $this, 'insert_reference_id_to_form' ) );
+	}
+
+	public function te_v2_show_payment_fields( $args ) {
+
+		$default = '<div class="wpsc-form-actions">';
+		ob_start();
+
+		$this->payment_fields();
+		$fields = ob_get_clean();
+
+		$args['before_form_actions'] = $fields . $default;
+
+		return $args;
+	}
+
+	public function process() {
+
+		$order = $this->purchase_log;
+
+		$status = $this->payment_capture === '' ? WPSC_Purchase_Log::ACCEPTED_PAYMENT : WPSC_Purchase_Log::ORDER_RECEIVED;
+
+		$order->set( 'processed', $status )->save();
+
+		$card_token = isset( $_POST['worldpay_pay_token'] ) ? sanitize_text_field( $_POST['worldpay_pay_token'] ) : '';
+
+		$this->order_handler->set_purchase_log( $order->get( 'id' ) );
+
+		switch ( $this->payment_capture ) {
+			case 'authorize' :
+
+				// Authorize only
+				$result = $this->authorize_payment( $card_token );
+
+				if ( $result ) {
+					// Mark as on-hold
+					$order->set( 'worldpay-status', __( 'WorldPay order opened. Capture the payment below. Authorized payments must be captured within 7 days.', 'wp-e-commerce' ) )->save();
+
+				} else {
+					$order->set( 'processed', WPSC_Purchase_Log::PAYMENT_DECLINED )->save();
+					$order->set( 'worldpay-status', __( 'Could not authorize WorldPay payment.', 'wp-e-commerce' ) )->save();
+				}
+
+			break;
+			default:
+
+				// Capture
+				$result = $this->capture_payment( $order, $card_token );
+
+				if ( $result ) {
+					// Payment complete
+					$order->set( 'worldpay-status', __( 'WorldPay order completed.  Funds have been authorized and captured.', 'wp-e-commerce' ) );
+				} else {
+					$order->set( 'processed'      , WPSC_Purchase_Log::PAYMENT_DECLINED );
+					$order->set( 'worldpay-status', __( 'Could not authorize WorldPay payment.', 'wp-e-commerce' ) );
+				}
+
+			break;
+		}
+
+		$order->save();
+		$this->go_to_transaction_results();
+
+	}
+
+	public function capture_payment( $log, $token ) {
+
+		if ( $this->purchase_log->get( 'gateway' ) == 'worldpay' ) {
+
+			$order = $this->purchase_log;
+
+			$params = array(
+				'amount'	        => $order->get( 'totalprice' ),
+				'orderId'	        => $order->get( 'id' ),
+				'invoiceNumber'     => $order->get( 'sessionid' ),
+				"addToVault"        => false,
+				"paymentVaultToken" => array(
+					"paymentMethodId" => $token,
+					"publicKey"       => $this->public_key
+				),
+				"extendedInformation" => array(
+					"typeOfGoods" => $this->type_of_goods( $order->get( 'id' ) )
+				),
+			);
+
+			$response = $this->execute( 'Payments/Charge', $params );
+
+			if ( is_wp_error( $response ) ) {
+				throw new Exception( $response->get_error_message() );
+			}
+
+			if ( isset( $response['ResponseBody']->transaction->transactionId ) ) {
+				$transaction_id = $response['ResponseBody']->transaction->transactionId;
+				$auth_code      = $response['ResponseBody']->transaction->authorizationCode;
+			} else {
 				return false;
 			}
-			
-			$transaction_id = $response['ResponseBody']->transaction->id;
-			
-			// Store transaction ID in the order
-			$order->set( 'sq_transactionid', $transaction_id )->save();
+
+			// Store transaction ID and Auth code in the order
+			$order->set( 'wp_transactionId', $transaction_id )->save();
+			$order->set( 'wp_order_status' , 'Completed' )->save();
+			$order->set( 'wp_authcode'     , $auth_code )->save();
 			$order->set( 'transactid'      , $transaction_id )->save();
-			// Set order status based on the charge being auth or not
-			$order_status = $preauth === true ? 'Open' : 'Completed';		
-			$order->set( 'sq_order_status' , $order_status )->save();
-			
+			$order->set( 'wp_order_token'  , $token )->save();
+
 			return true;
 		}
+
 		return false;
 	}
-	
+
+	public function authorize_payment( $token ) {
+
+		if ( $this->purchase_log->get( 'gateway' ) == 'worldpay' ) {
+
+			$order = $this->purchase_log;
+
+			$params = array(
+				'amount'	        => $order->get( 'totalprice' ),
+				'orderId'	        => $order->get( 'id' ),
+				'invoiceNumber'     => $order->get( 'sessionid' ),
+				"addToVault"        => false,
+				"paymentVaultToken" => array(
+					"paymentMethodId" => $token,
+					"publicKey"       => $this->public_key,
+				),
+				"extendedInformation" => array(
+					"typeOfGoods" => $this->type_of_goods( $order->get( 'id' ) )
+				),
+			);
+
+			$response = $this->execute( 'Payments/Authorize', $params );
+
+			if ( is_wp_error( $response ) ) {
+				throw new Exception( $response->get_error_message() );
+			}
+
+			if ( isset( $response['ResponseBody']->transaction->transactionId ) ) {
+				$transaction_id = $response['ResponseBody']->transaction->transactionId;
+				$auth_code      = $response['ResponseBody']->transaction->authorizationCode;
+			} else {
+				return false;
+			}
+
+			// Store transaction ID and Auth code in the order
+			$order->set( 'wp_transactionId', $transaction_id )->save();
+			$order->set( 'wp_order_status' , 'Open' )->save();
+			$order->set( 'wp_authcode'     , $auth_code )->save();
+			$order->set( 'transactid'      , $transaction_id )->save();
+			$order->set( 'wp_order_token'  , $token )->save();
+
+			return true;
+		}
+
+		return false;
+	}
+
 	public function execute( $endpoint, $params = array(), $type = 'POST' ) {
+
 	   // where we make the API petition
         $endpoint = $this->endpoint . $endpoint;
+
+		if ( ! is_null( $params ) ) {
+			$params += array(
+				"developerApplication" => array(
+					"developerId" => 10000644,
+					"version"     => "1.2"
+				),
+			);
+		}
+
 		$data = json_encode( $params );
+
 		$args = array(
 			'timeout' => 15,
 			'headers' => array(
-				'Authorization' => 'Bearer ' . $this->acc_token,
+				'Authorization' => $this->auth,
 				'Content-Type'  => 'application/json',
-				'Accept'		=> 'application/json',
 			),
 			'sslverify' => false,
 			'body'      => $data,
 		);
+
 		$request  = $type == 'GET' ? wp_safe_remote_get( $endpoint, $args ) : wp_safe_remote_post( $endpoint, $args );
         $response = wp_remote_retrieve_body( $request );
 
 		if ( ! is_wp_error( $request ) ) {
+
 			$response_object = array();
 			$response_object['ResponseBody'] = json_decode( $response );
 			$response_object['Status']       = wp_remote_retrieve_response_code( $request );
-			$response = $response_object;
+
+			$request = $response_object;
 		}
-		return $response;
+
+		return $request;
     }
+
+	public function type_of_goods( $log_id ) {
+		$digital = 0;
+
+		$log = new WPSC_Purchase_Log( $log_id );
+		$cart = $log->get_items();
+
+		foreach ( $cart as $cartitem ) {
+			$product_meta = get_post_meta( $cartitem->prodid, '_wpsc_product_metadata' );
+
+			if ( isset( $product_meta[0]['no_shipping'] ) && $product_meta[0]['no_shipping'] == 1 ) {
+				$digital++;
+			}
+		}
+
+		return $digital == count( $cart ) ? 'DIGITAL' : 'PHYSICAL';
+	}
 }
 
-class WPSC_Square_Payments_Order_Handler {
+class WPSC_WorldPay_Payments_Order_Handler {
+
 	private static $instance;
-	public $log;
-	public $gateway;
-	
+	private $log;
+	private $gateway;
+
 	public function __construct( &$gateway ) {
+
 		$this->log     = $gateway->purchase_log;
 		$this->gateway = $gateway;
+
 		$this->init();
 	}
+
 	/**
 	 * Constructor
 	 */
 	public function init() {
 		add_action( 'wpsc_purchlogitem_metabox_start', array( $this, 'meta_box' ), 8 );
-		add_action( 'wp_ajax_square_order_action'  , array( $this, 'order_actions' ) );
+		add_action( 'wp_ajax_worldpay_order_action'  , array( $this, 'order_actions' ) );
+
 	}
-	
+
 	public static function get_instance( $gateway ) {
 		if ( is_null( self::$instance ) ) {
-			self::$instance = new WPSC_Square_Payments_Order_Handler( $gateway );
+			self::$instance = new WPSC_WorldPay_Payments_Order_Handler( $gateway );
 		}
+
 		return self::$instance;
 	}
 
 	public function set_purchase_log( $id ) {
 		$this->log = new WPSC_Purchase_Log( $id );
 	}
+
 	/**
-	 * Perform order actions
+	 * Perform order actions for amazon
 	 */
 	public function order_actions() {
-		check_ajax_referer( 'sq_order_action', 'security' );
+		check_ajax_referer( 'wp_order_action', 'security' );
+
 		$order_id = absint( $_POST['order_id'] );
-		$id       = isset( $_POST['square_id'] ) ? sanitize_text_field( $_POST['square_id'] ) : '';
-		$action   = sanitize_title( $_POST['square_action'] );
+		$id       = isset( $_POST['worldpay_id'] ) ? sanitize_text_field( $_POST['worldpay_id'] ) : '';
+		$action   = sanitize_title( $_POST['worldpay_action'] );
+
 		$this->set_purchase_log( $order_id );
+
 		switch ( $action ) {
 			case 'capture' :
 				//Capture an AUTH
 				$this->capture_payment($id);
 			break;
+
 			case 'void' :
-				// void auth before settled
+				// void capture or auth before settled
 				$this->void_payment( $id );
 			break;
+
 			case 'refund' :
-				// refund a captured payment
+				// refund a settled payment
 				$this->refund_payment( $id );
 			break;
+
+			case 'void_refund' :
+				// void a refund request
+				$this->void_refund( $id );
+			break;
 		}
-		echo json_encode( array( 'action' => $action, 'order_id' => $order_id, 'square_id' => $id ) );
+
+		echo json_encode( array( 'action' => $action, 'order_id' => $order_id, 'worldpay_id' => $id ) );
+
 		die();
 	}
+
 	/**
 	 * meta_box function.
 	 *
@@ -494,12 +507,14 @@ class WPSC_Square_Payments_Order_Handler {
 	 */
 	function meta_box( $log_id ) {
 		$this->set_purchase_log( $log_id );
+
 		$gateway = $this->log->get( 'gateway' );
-		
-		if ( $gateway == 'square-payments' ) {
+
+		if ( $gateway == 'worldpay' ) {
 			$this->authorization_box();
 		}
 	}
+
 	/**
 	 * pre_auth_box function.
 	 *
@@ -507,204 +522,296 @@ class WPSC_Square_Payments_Order_Handler {
 	 * @return void
 	 */
 	public function authorization_box() {
+
 		$actions  = array();
 		$order_id = $this->log->get( 'id' );
 
 		// Get ids
-		$sq_transactionid 	= $this->log->get( 'sq_transactionid' );
-		$sq_order_status	= $this->log->get( 'sq_order_status' );
+		$wp_transaction_id 	= $this->log->get( 'wp_transactionId' );
+		$wp_auth_code		= $this->log->get( 'wp_authcode' );
+		$wp_order_status	= $this->log->get( 'wp_order_status' );
 
 		//Don't change order status if a refund has been requested
-		$sq_refund_set = wpsc_get_purchase_meta( $order_id, 'square_refunded', true );
-		$order_info    = $this->refresh_transaction_info( $sq_transactionid, ! (bool) $sq_refund_set );
+		$wp_refund_set = wpsc_get_purchase_meta( $order_id, 'worldpay_refunded', true );
+		$order_info    = $this->refresh_transaction_info( $wp_transaction_id, ! (bool) $wp_refund_set );
 		?>
 
 		<div class="metabox-holder">
-			<div id="wpsc-square-payments" class="postbox">
-				<h3 class='hndle'><?php _e( 'Square Payments' , 'wp-e-commerce' ); ?></h3>
+			<div id="wpsc-worldpay-payments" class="postbox">
+				<h3 class='hndle'><?php _e( 'WorldPay Payments' , 'wp-e-commerce' ); ?></h3>
 				<div class='inside'>
 					<p><?php
 							_e( 'Current status: ', 'wp-e-commerce' );
-							echo wp_kses_data( $this->log->get( 'square-status' ) );
+							echo wp_kses_data( $this->log->get( 'worldpay-status' ) );
 						?>
 					</p>
 					<p><?php
 							_e( 'Transaction ID: ', 'wp-e-commerce' );
-							echo wp_kses_data( $sq_transactionid );
+							echo wp_kses_data( $wp_transaction_id );
 						?>
 					</p>
 		<?php
+
 		//Show actions based on order status
-		switch ( $sq_order_status ) {
+		switch ( $wp_order_status ) {
 			case 'Open' :
 				//Order is only authorized and still not captured/voided
 				$actions['capture'] = array(
-					'id'     => $sq_transactionid,
+					'id'     => $wp_transaction_id,
 					'button' => __( 'Capture funds', 'wp-e-commerce' )
 				);
+
 				//
 				if ( ! $order_info['settled'] ) {
 					//Void
 					$actions['void'] = array(
-						'id'     => $sq_transactionid,
+						'id'     => $wp_transaction_id,
 						'button' => __( 'Void order', 'wp-e-commerce' )
 					);
 				}
+
 				break;
 			case 'Completed' :
 				//Order has been captured or its a direct payment
 				if ( $order_info['settled'] ) {
 					//Refund
 					$actions['refund'] = array(
-						'id'     => $sq_transactionid,
+						'id'     => $wp_transaction_id,
 						'button' => __( 'Refund order', 'wp-e-commerce' )
 					);
+				} else {
+					//Void
+					$actions['void'] = array(
+						'id'     => $wp_transaction_id,
+						'button' => __( 'Void order', 'wp-e-commerce' )
+					);
 				}
+
 			break;
 			case 'Refunded' :
+				//Order is settled and a refund has been requested
+				$wp_refund_id       = wpsc_get_purchase_meta( $order_id, 'worldpay_refund_id', true );
+
+				if ( $wp_refund_id ) {
+					//Get refund order status to check if its eligible for a void (not settled)
+					$refund_status = $this->refresh_transaction_info( $wp_refund_id, false );
+
+					if ( ! $refund_status['settled'] ) {
+						//Show void only if not settled.
+						$actions['void_refund'] = array(
+							'id'     => $wp_refund_id,
+							'button' => __( 'Void Refund request', 'wp-e-commerce' )
+						);
+					}
+				}
+
+				break;
+			case 'Voided' :
 			break;
 		}
+
 		if ( ! empty( $actions ) ) {
+
 			echo '<p class="buttons">';
+
 			foreach ( $actions as $action_name => $action ) {
 				echo '<a href="#" class="button" data-action="' . $action_name . '" data-id="' . $action['id'] . '">' . $action['button'] . '</a> ';
 			}
+
 			echo '</p>';
+
 		}
 		?>
 		<script type="text/javascript">
 		jQuery( document ).ready( function( $ ) {
-			$('#wpsc-square-payments').on( 'click', 'a.button, a.refresh', function( e ) {
+			$('#wpsc-worldpay-payments').on( 'click', 'a.button, a.refresh', function( e ) {
 				var $this = $( this );
 				e.preventDefault();
+
 				var data = {
-					action: 		'square_order_action',
-					security: 		'<?php echo wp_create_nonce( "sq_order_action" ); ?>',
+					action: 		'worldpay_order_action',
+					security: 		'<?php echo wp_create_nonce( "wp_order_action" ); ?>',
 					order_id: 		'<?php echo $order_id; ?>',
-					square_action: 	$this.data('action'),
-					square_id: 		$this.data('id'),
-					square_refund_amount: $('.square_refund_amount').val(),
+					worldpay_action: 	$this.data('action'),
+					worldpay_id: 		$this.data('id'),
+					worldpay_refund_amount: $('.worldpay_refund_amount').val(),
 				};
+
 				// Ajax action
 				$.post( ajaxurl, data, function( result ) {
 						location.reload();
 					}, 'json' );
+
 				return false;
 			});
 		} );
+
 		</script>
 		</div>
 		</div>
 		</div>
 		<?php
 	}
-	
+
     /**
      * Get the order status from API
      *
      * @param  string $transaction_id
      */
 	public function refresh_transaction_info( $transaction_id, $update = true ) {
-		if ( $this->log->get( 'gateway' ) == 'square-payments' ) {
 
-			$response = $this->gateway->execute( "locations/{$this->gateway->location_id}/transactions/$transaction_id", null, 'GET' );
+		if ( $this->log->get( 'gateway' ) == 'worldpay' ) {
+
+			$response = $this->gateway->execute( 'transactions/'. $transaction_id, null, 'GET' );
+
 			if ( is_wp_error( $response ) ) {
 				throw new Exception( $response->get_error_message() );
 			}
+
 			$response_object = array();
 			$response_object['trans_type'] = $response['ResponseBody']->transactions[0]->transactionType;
 			$response_object['settled']    = isset( $response['ResponseBody']->transactions[0]->settlementData ) ? true : false;
+
 			//Recheck status and update if required
 			if ( $update ) {
 				switch ( $response_object['trans_type'] ) {
 					case 'AUTH_ONLY' :
-						$this->log->set( 'sq_order_status', 'Open' )->save();
+						$this->log->set( 'wp_order_status', 'Open' )->save();
 					break;
+
 					case 'VOID' :
-						$this->log->set( 'sq_order_status', 'Voided' )->save();
+						$this->log->set( 'wp_order_status', 'Voided' )->save();
 					break;
+
 					case 'REFUND' :
 					case 'CREDIT' :
-						$this->log->set( 'sq_order_status', 'Refunded' )->save();
+						$this->log->set( 'wp_order_status', 'Refunded' )->save();
 					break;
+
 					case 'AUTH_CAPTURE' :
 					case 'PRIOR_AUTH_CAPTURE' :
-						$this->log->set( 'sq_order_status', 'Completed' )->save();
+						$this->log->set( 'wp_order_status', 'Completed' )->save();
 					break;
 				}
 			}
+
 			return $response_object;
 		}
 	}
-	
+
+
     /**
      * Void auth/capture
      *
      * @param  string $transaction_id
      */
     public function void_payment( $transaction_id ) {
-		if ( $this->log->get( 'gateway' ) == 'square-payments' ) {
-			$response = $this->gateway->execute( "locations/{$this->location_id}/transactions/{$transaction_id}/void", $params, null );
-			
+
+		if ( $this->log->get( 'gateway' ) == 'worldpay' ) {
+
+			$params = array(
+				'amount'		=> $this->log->get( 'totalprice' ),
+				'transactionId' => $transaction_id,
+			);
+
+			$response = $this->gateway->execute( 'Payments/Void', $params );
+
 			if ( is_wp_error( $response ) ) {
 				throw new Exception( $response->get_error_message() );
 			}
-			
-			$this->log->set( 'sq_order_status', 'Voided' )->save();
-			$this->log->set( 'square-status', 'Authorization voided ' )->save();
+
+			$this->log->set( 'wp_order_status', 'Voided' )->save();
+			$this->log->set( 'worldpay-status', sprintf( __( 'Authorization voided (Auth ID: %s)', 'wp-e-commerce' ), $response['ResponseBody']->transaction->authorizationCode ) )->save();
 			$this->log->set( 'processed'      , WPSC_Purchase_Log::INCOMPLETE_SALE )->save();
+			$this->log->set( 'transactid'     , $response['ResponseBody']->transaction->transactionId )->save();
 		}
     }
-	
+
     /**
      * Refund payment
      *
      * @param  string $transaction_id
      */
     public function refund_payment( $transaction_id ) {
-		if ( $this->log->get( 'gateway' ) == 'square-payments' ) {
+
+		if ( $this->log->get( 'gateway' ) == 'worldpay' ) {
+
 			$params = array(
-				'idempotency_key' 	=> uniqid(),
-				'tender_id'			=> '',
-				# Monetary amounts are specified in the smallest unit of the applicable currency.
-				# This amount is in cents. It's also hard-coded for $1.00, which isn't very useful.
-				'amount_money' 		=> array (
-					'amount'	=> floatval( $order->get( 'totalprice' ) ) * 100,
-					'currency'	=> strtoupper( $this->get_currency_code() ),
-				),				
+				'amount'		=> $this->log->get( 'totalprice' ),
+				'transactionId' => $transaction_id,
+
 			);
-			
-			$response = $this->gateway->execute( "locations/{$this->location_id}/transactions/{$transaction_id}/refund", $params );
-			
+
+			$response = $this->gateway->execute( 'Payments/Refund', $params );
+
 			if ( is_wp_error( $response ) ) {
 				throw new Exception( $response->get_error_message() );
 			}
-			
-			wpsc_add_purchase_meta( $this->log->get( 'id' ), 'square_refunded', true );
-			wpsc_add_purchase_meta( $this->log->get( 'id' ), 'square_refund_id', $response['ResponseBody']->refund->id );
-			$this->log->set( 'square-status', sprintf( __( 'Refunded (Transaction ID: %s)', 'wp-e-commerce' ), $response['ResponseBody']->refund->id ) )->save();
+
+			wpsc_add_purchase_meta( $this->log->get( 'id' ), 'worldpay_refunded', true );
+			wpsc_add_purchase_meta( $this->log->get( 'id' ), 'worldpay_refund_id', $response['ResponseBody']->transaction->transactionId );
+
+			$this->log->set( 'worldpay-status', sprintf( __( 'Refunded (Transaction ID: %s)', 'wp-e-commerce' ), $response['ResponseBody']->transaction->transactionId ) )->save();
 			$this->log->set( 'processed'      , WPSC_Purchase_Log::REFUNDED )->save();
-			$this->log->set( 'sq_order_status', 'Refunded' )->save();
+			$this->log->set( 'wp_order_status', 'Refunded' )->save();
+			$this->log->set( 'transactid'     , $response['ResponseBody']->transaction->transactionId )->save();
 		}
     }
-	
+
     /**
      * Capture authorized payment
      *
      * @param  string $transaction_id
      */
     public function capture_payment( $transaction_id ) {
-		if ( $this->log->get( 'gateway' ) == 'square-payments' ) {
-			$response = $this->gateway->execute( "locations/{$this->location_id}/transactions/{$transaction_id}/capture", null );
-			
+
+		if ( $this->log->get( 'gateway' ) == 'worldpay' ) {
+
+			$params = array(
+				'amount'		=> $this->log->get( 'totalprice' ),
+				'transactionId' => $transaction_id,
+			);
+
+			$response = $this->gateway->execute( 'Payments/Capture', $params );
+
 			if ( is_wp_error( $response ) ) {
 				throw new Exception( $response->get_error_message() );
 			}
-			
-			$this->log->set( 'sq_order_status', 'Completed' )->save();
-			$this->log->set( 'square-status', 'Authorization Captured' )->save();
+
+			$this->log->set( 'wp_order_status', 'Completed' )->save();
+			$this->log->set( 'worldpay-status', sprintf( __( 'Authorization Captured (Auth ID: %s)', 'wp-e-commerce' ), $response['ResponseBody']->transaction->authorizationCode ) )->save();
 			$this->log->set( 'processed'      , WPSC_Purchase_Log::ACCEPTED_PAYMENT )->save();
+			$this->log->set( 'transactid'     , $response['ResponseBody']->transaction->transactionId )->save();
+		}
+    }
+
+    /**
+     * Void a refund request
+     *
+     * @param  string $transaction_id
+     */
+    public function void_refund( $transaction_id ) {
+
+		if ( $this->log->get( 'gateway' ) == 'worldpay' ) {
+
+			$params = array(
+				'amount'		=> $this->log->get( 'totalprice' ),
+				'transactionId' => $transaction_id,
+			);
+
+			$response = $this->gateway->execute( 'Payments/Void', $params );
+
+			if ( is_wp_error( $response ) ) {
+				throw new Exception( $response->get_error_message() );
+			}
+
+			wpsc_delete_purchase_meta( $this->log->get( 'id' ), 'worldpay_refunded' );
+			wpsc_delete_purchase_meta( $this->log->get( 'id' ), 'worldpay_refund_id' );
+
+			$this->log->set( 'processed'      , WPSC_Purchase_Log::ACCEPTED_PAYMENT )->save();
+			$this->log->set( 'wp_order_status', 'Completed' )->save();
+			$this->log->set( 'worldpay-status', sprintf( __( 'Refund Voided (Transaction ID: %s)', 'wp-e-commerce' ), $response['ResponseBody']->transaction->transactionId ) )->save();
+			$this->log->set( 'transactid'     , $response['ResponseBody']->transaction->transactionId )->save();
 		}
     }
 }
-?>
