@@ -33,9 +33,13 @@ class WPSC_Payment_Gateway_Square_Payments extends WPSC_Payment_Gateway {
 		add_action( 'wp_enqueue_scripts', array( $this, 'square_scripts' ) );
 		add_action( 'wp_head'	, array( $this, 'footer_script' ) );
 		
-		add_filter( 'wpsc_get_checkout_payment_method_form_args', array( $this, 'te_v2_show_payment_fields' ) );
 		// Add hidden field to hold token value
-		add_filter( 'wpsc_get_checkout_payment_method_form_args', array( $this, 'insert_reference_id_to_form' ) );
+		add_action( 'wpsc_inside_shopping_cart', array( $this, 'te_v1_insert_hidden_field' ) );
+		add_action( 'wpsc_default_credit_card_form_end', array( $this, 'te_v2_insert_hidden_field' ) );
+		
+		// Add extra zip field to card data for TeV1
+		add_action( 'wpsc_tev1_default_credit_card_form_end', array( $this, 'tev1_add_billing_card_zip' ) );
+		add_filter( 'wpsc_default_credit_card_form_fields', array( $this, 'tev2_add_billing_card_zip' ), 10, 2 );
 	}
 	
 	/**
@@ -46,17 +50,35 @@ class WPSC_Payment_Gateway_Square_Payments extends WPSC_Payment_Gateway {
 	public function load() {
 		return version_compare( phpversion(), '5.3', '>=' );
 	}
-	
-	public function te_v2_show_payment_fields( $args ) {
-		$default = '<div class="wpsc-form-actions">';
-		ob_start();
-		$this->payment_fields();
-		$fields = ob_get_clean();
-		$args['before_form_actions'] = $fields . $default;
-		return $args;
+
+	public function tev2_add_billing_card_zip( $fields, $name ) {
+		$fields['card-zip-field'] = '<p class="form-row form-row-last">
+					<label for="' . esc_attr( $name ) . '-card-zip">' . __( 'Card Zip', 'wpec-square' ) . ' <span class="required">*</span></label>
+					<input id="' . esc_attr( $name ) . '-card-zip" class="input-text wpsc-credit-card-form-card-zip" type="number" autocomplete="off" placeholder="' . esc_attr__( 'Card Zip', 'wpec-square' ) . '" />
+				</p>';
+
+		return $fields;
 	}
 	
-	//$this->payment_fields to show the card fields but where ?
+	public function tev1_add_billing_card_zip( $name ) {
+		?>
+		<tr>
+			<td><?php _e( 'Card Zip', 'wpec-square' ); ?></td>
+			<td>
+				<input type="text" id="<?php esc_attr_e( $name ); ?>-card-zip" value="" autocomplete="off" size="5" placeholder="<?php esc_attr_e( 'Card Zip', 'wpec-square' ); ?>" />
+			</td>
+		</tr>
+		<?php
+	}
+	
+	public function te_v1_insert_hidden_field() {
+		echo '<input type="hidden" id="square_card_nonce" name="square_card_nonce" value="" />';
+	}
+
+	// This needs to be inserted inside the checkout page
+	public function te_v2_insert_hidden_field( $name ) {
+		echo '<input type="hidden" id="square_card_nonce" name="square_card_nonce" value="" />';
+	}
 	
 	/**
 	 * Add scripts
@@ -101,16 +123,16 @@ class WPSC_Payment_Gateway_Square_Payments extends WPSC_Payment_Gateway {
 				  }
 				],
 				cardNumber: {
-				  elementId: 'square_payments-card-number',
+				  elementId: 'square-payments-card-number',
 				},
 				cvv: {
-				  elementId: 'square_payments-card-cvc',
+				  elementId: 'square-payments-card-cvc',
 				},
 				expirationDate: {
-				  elementId: 'square_payments-card-expiry',
+				  elementId: 'square-payments-card-expiry',
 				},
 				postalCode: {
-				  elementId: 'square_payments-card-zip',
+				  elementId: 'square-payments-card-zip',
 				},
 				callbacks: {
 
@@ -154,21 +176,6 @@ class WPSC_Payment_Gateway_Square_Payments extends WPSC_Payment_Gateway {
 		</script>
 		<?php
 	}
-	
-	// This needs to be inserted inside the checkout page
-	public function insert_reference_id_to_form( $args ) {
-		ob_start();
-		echo '<input type="hidden" id="square_card_nonce" name="square_card_nonce" value="" />';
-		
-		$id = ob_get_clean();
-		if ( isset( $args['before_form_actions'] ) ) {
-			$args['before_form_actions'] .= $id;
-		} else {
-			$args['before_form_actions']  = $id;
-		}
-		return $args;
-	}
-	
 	
 	public function setup_form() {
 ?>
