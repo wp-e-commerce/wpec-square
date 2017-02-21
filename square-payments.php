@@ -100,6 +100,15 @@ class WPSC_Payment_Gateway_Square_Payments extends WPSC_Payment_Gateway {
             return;
         }
 
+		if( wpsc_is_theme_engine( '2.0' ) ) {
+			require_once( WPSC_TE_V2_CLASSES_PATH . '/checkout-wizard.php' );
+			$wizard = WPSC_Checkout_Wizard::get_instance();
+			
+			if ( $wizard->active_step != 'payment' ) {
+				return;
+			}
+		}
+
 		?>
 		<style type="text/css">
 		.square-card {
@@ -138,8 +147,6 @@ class WPSC_Payment_Gateway_Square_Payments extends WPSC_Payment_Gateway {
 				  // nonce, even if the request failed because of an error.
 				  cardNonceResponseReceived: function(errors, nonce, cardData) {
 					if (errors) {
-					  console.log("Encountered errors:");
-
 					  // This logs all errors encountered during nonce generation to the
 					  // Javascript console.
 					  errors.forEach(function(error) {
@@ -151,9 +158,9 @@ class WPSC_Payment_Gateway_Square_Payments extends WPSC_Payment_Gateway {
 					// No errors occurred. Extract the card nonce.
 					} else {
 						//alert('Nonce received! ' + nonce + ' ' + JSON.stringify(cardData));
-						var nonceField = document.getElementById('square_card_nonce');
+						var nonceField = document.getElementById( 'square_card_nonce' );
 						nonceField.value = nonce;
-						document.getElementById('wpsc-checkout-form').submit();
+						jQuery( '#wpsc-checkout-form, .wpsc_checkout_forms' ).submit();
 					}
 				  },
 
@@ -166,10 +173,12 @@ class WPSC_Payment_Gateway_Square_Payments extends WPSC_Payment_Gateway {
 			});
 		
 			jQuery( document ).ready( function( $ ) {
-				$( '#wpsc-checkout-form' ).submit( function( e ) {
+				$( '#wpsc-checkout-form, .wpsc_checkout_forms' ).on( 'submit', function( e ) {
 					e.preventDefault();
+					$(this).off();
 					sqPaymentForm.requestCardNonce();
 				});
+
 			});
 		</script>
 		<?php
@@ -257,9 +266,9 @@ class WPSC_Payment_Gateway_Square_Payments extends WPSC_Payment_Gateway {
 		$card_token = isset( $_POST['square_card_nonce'] ) ? sanitize_text_field( $_POST['square_card_nonce'] ) : '';
 
 		$order->set( 'processed', $status )->save();
-	
+
 		$this->order_handler->set_purchase_log( $order->get( 'id' ) );
-	
+
 		switch ( $this->payment_capture ) {
 			case 'authorize' :
 				// Authorize only
@@ -282,7 +291,7 @@ class WPSC_Payment_Gateway_Square_Payments extends WPSC_Payment_Gateway {
 				}
 			break;
 		}
-		
+
 		$order->save();
 		$this->go_to_transaction_results();
 	}
@@ -315,8 +324,7 @@ class WPSC_Payment_Gateway_Square_Payments extends WPSC_Payment_Gateway {
 			
 			$response = $this->execute( "locations/{$this->location_id}/transactions", $params );
 
-			var_dump($response);
-			exit;
+			error_log( print_r( $response, true ) );
 			if( isset( $response['ResponseBody']->errors ) ) {
 				$order->set( 'square-status', $response['ResponseBody']->errors[0]->detail );
 				return false;
