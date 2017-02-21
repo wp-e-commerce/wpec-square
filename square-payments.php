@@ -10,10 +10,10 @@ class WPSC_Payment_Gateway_Square_Payments extends WPSC_Payment_Gateway {
 	private $payment_capture;
 	private $order_handler;
 	public $location_id;
-	
+
 	public function __construct() {
 		parent::__construct();
-		
+
 		$this->title 			= __( 'Square', 'wpsc' );
 		$this->supports 		= array( 'default_credit_card_form', 'tev1' );
 		$this->sandbox			= $this->setting->get( 'sandbox_mode' ) == '1' ? true : false;
@@ -29,19 +29,19 @@ class WPSC_Payment_Gateway_Square_Payments extends WPSC_Payment_Gateway {
 
 	public function init() {
 		parent::init();
-		
+
 		add_action( 'wp_enqueue_scripts', array( $this, 'square_scripts' ) );
 		add_action( 'wp_head'	, array( $this, 'footer_script' ) );
-		
+
 		// Add hidden field to hold token value
 		add_action( 'wpsc_inside_shopping_cart', array( $this, 'te_v1_insert_hidden_field' ) );
 		add_action( 'wpsc_default_credit_card_form_end', array( $this, 'te_v2_insert_hidden_field' ) );
-		
+
 		// Add extra zip field to card data for TeV1
 		add_action( 'wpsc_tev1_default_credit_card_form_end', array( $this, 'tev1_add_billing_card_zip' ) );
 		add_filter( 'wpsc_default_credit_card_form_fields', array( $this, 'tev2_add_billing_card_zip' ), 10, 2 );
 	}
-	
+
 	/**
 	 * Load gateway only if PHP 5.3+ and TEv2.
 	 *
@@ -59,7 +59,7 @@ class WPSC_Payment_Gateway_Square_Payments extends WPSC_Payment_Gateway {
 
 		return $fields;
 	}
-	
+
 	public function tev1_add_billing_card_zip( $name ) {
 		?>
 		<tr>
@@ -70,7 +70,7 @@ class WPSC_Payment_Gateway_Square_Payments extends WPSC_Payment_Gateway {
 		</tr>
 		<?php
 	}
-	
+
 	public function te_v1_insert_hidden_field() {
 		echo '<input type="hidden" id="square_card_nonce" name="square_card_nonce" value="" />';
 	}
@@ -79,20 +79,20 @@ class WPSC_Payment_Gateway_Square_Payments extends WPSC_Payment_Gateway {
 	public function te_v2_insert_hidden_field( $name ) {
 		echo '<input type="hidden" id="square_card_nonce" name="square_card_nonce" value="" />';
 	}
-	
+
 	/**
 	 * Add scripts
 	 */
 	public function square_scripts() {
  		$is_cart = wpsc_is_theme_engine( '1.0' ) ? wpsc_is_checkout() : ( wpsc_is_checkout() || wpsc_is_cart() );
- 
+
         if ( ! $is_cart ) {
             return;
         }
 
 		wp_enqueue_script( 'squareup', 'https://js.squareup.com/v2/paymentform' );
 	}
-	
+
 	public function footer_script() {
  		$is_cart = wpsc_is_theme_engine( '1.0' ) ? wpsc_is_checkout() : ( wpsc_is_checkout() || wpsc_is_cart() );
  
@@ -118,7 +118,7 @@ class WPSC_Payment_Gateway_Square_Payments extends WPSC_Payment_Gateway {
 		  outline: 5px auto rgb(255, 97, 97);
 		}
 		</style>
-		
+
 		<script type='text/javascript'>
 			var alerts = '';
 			var sqPaymentForm = new SqPaymentForm({
@@ -171,7 +171,7 @@ class WPSC_Payment_Gateway_Square_Payments extends WPSC_Payment_Gateway {
 				  }
 				}
 			});
-		
+
 			jQuery( document ).ready( function( $ ) {
 				$( '#wpsc-checkout-form, .wpsc_checkout_forms' ).on( 'submit', function( e ) {
 					e.preventDefault();
@@ -183,7 +183,7 @@ class WPSC_Payment_Gateway_Square_Payments extends WPSC_Payment_Gateway {
 		</script>
 		<?php
 	}
-	
+
 	public function setup_form() {
 ?>
 		<!-- Account Credentials -->
@@ -256,12 +256,12 @@ class WPSC_Payment_Gateway_Square_Payments extends WPSC_Payment_Gateway {
 		</tr>
 <?php
 	}
-	
+
 	public function process() {
-		
+
 		$order = $this->purchase_log;
 		$status = $this->payment_capture === '' ? WPSC_Purchase_Log::ACCEPTED_PAYMENT : WPSC_Purchase_Log::ORDER_RECEIVED;
-		
+
 		// Check card token created, if not error out ?
 		$card_token = isset( $_POST['square_card_nonce'] ) ? sanitize_text_field( $_POST['square_card_nonce'] ) : '';
 
@@ -280,6 +280,7 @@ class WPSC_Payment_Gateway_Square_Payments extends WPSC_Payment_Gateway {
 					$order->set( 'processed', WPSC_Purchase_Log::PAYMENT_DECLINED )->save();
 					}
 			break;
+
 			default:
 				// Capture
 				$result = $this->capture_payment( $card_token );
@@ -299,7 +300,7 @@ class WPSC_Payment_Gateway_Square_Payments extends WPSC_Payment_Gateway {
 	public function capture_payment( $card_token, $preauth = false ) {
 		if ( $this->purchase_log->get( 'gateway' ) == 'square-payments' ) {
 			$order = $this->purchase_log;
-			
+
 			$params = array(
 				'card_nonce' 		=> $card_token,
 				'reference_id'		=> $order->get( 'id' ),
@@ -321,17 +322,16 @@ class WPSC_Payment_Gateway_Square_Payments extends WPSC_Payment_Gateway {
 				'idempotency_key' 	=> uniqid(),
 				'delay_capture'		=> $preauth,
 			);
-			
+
 			$response = $this->execute( "locations/{$this->location_id}/transactions", $params );
 
-			error_log( print_r( $response, true ) );
 			if( isset( $response['ResponseBody']->errors ) ) {
 				$order->set( 'square-status', $response['ResponseBody']->errors[0]->detail );
 				return false;
 			}
-			
+
 			$transaction_id = $response['ResponseBody']->transaction->id;
-			
+
 			// Store transaction ID in the order
 			$order->set( 'sq_transactionid', $transaction_id )->save();
 			$order->set( 'transactid'      , $transaction_id )->save();
@@ -343,7 +343,7 @@ class WPSC_Payment_Gateway_Square_Payments extends WPSC_Payment_Gateway {
 		}
 		return false;
 	}
-	
+
 	public function execute( $endpoint, $params = array(), $type = 'POST' ) {
 	   // where we make the API petition
         $endpoint = $this->endpoint . $endpoint;
@@ -358,6 +358,7 @@ class WPSC_Payment_Gateway_Square_Payments extends WPSC_Payment_Gateway {
 			'sslverify' => false,
 			'body'      => $data,
 		);
+		
 		$request  = $type == 'GET' ? wp_safe_remote_get( $endpoint, $args ) : wp_safe_remote_post( $endpoint, $args );
         $response = wp_remote_retrieve_body( $request );
 
@@ -375,12 +376,13 @@ class WPSC_Square_Payments_Order_Handler {
 	private static $instance;
 	public $log;
 	public $gateway;
-	
+
 	public function __construct( &$gateway ) {
 		$this->log     = $gateway->purchase_log;
 		$this->gateway = $gateway;
 		$this->init();
 	}
+
 	/**
 	 * Constructor
 	 */
@@ -388,7 +390,7 @@ class WPSC_Square_Payments_Order_Handler {
 		add_action( 'wpsc_purchlogitem_metabox_start', array( $this, 'meta_box' ), 8 );
 		add_action( 'wp_ajax_square_order_action'  , array( $this, 'order_actions' ) );
 	}
-	
+
 	public static function get_instance( $gateway ) {
 		if ( is_null( self::$instance ) ) {
 			self::$instance = new WPSC_Square_Payments_Order_Handler( $gateway );
@@ -399,6 +401,7 @@ class WPSC_Square_Payments_Order_Handler {
 	public function set_purchase_log( $id ) {
 		$this->log = new WPSC_Purchase_Log( $id );
 	}
+
 	/**
 	 * Perform order actions
 	 */
@@ -425,6 +428,7 @@ class WPSC_Square_Payments_Order_Handler {
 		echo json_encode( array( 'action' => $action, 'order_id' => $order_id, 'square_id' => $id ) );
 		die();
 	}
+
 	/**
 	 * meta_box function.
 	 *
@@ -434,11 +438,12 @@ class WPSC_Square_Payments_Order_Handler {
 	function meta_box( $log_id ) {
 		$this->set_purchase_log( $log_id );
 		$gateway = $this->log->get( 'gateway' );
-		
+
 		if ( $gateway == 'square-payments' ) {
 			$this->authorization_box();
 		}
 	}
+
 	/**
 	 * pre_auth_box function.
 	 *
@@ -537,7 +542,7 @@ class WPSC_Square_Payments_Order_Handler {
 		</div>
 		<?php
 	}
-	
+
     /**
      * Get the order status from API
      *
@@ -550,6 +555,7 @@ class WPSC_Square_Payments_Order_Handler {
 			if ( is_wp_error( $response ) ) {
 				throw new Exception( $response->get_error_message() );
 			}
+
 			$response_object = array();
 			$response_object['trans_type'] = $response['ResponseBody']->transactions[0]->transactionType;
 			$response_object['settled']    = isset( $response['ResponseBody']->transactions[0]->settlementData ) ? true : false;
@@ -575,7 +581,7 @@ class WPSC_Square_Payments_Order_Handler {
 			return $response_object;
 		}
 	}
-	
+
     /**
      * Void auth/capture
      *
@@ -584,17 +590,17 @@ class WPSC_Square_Payments_Order_Handler {
     public function void_payment( $transaction_id ) {
 		if ( $this->log->get( 'gateway' ) == 'square-payments' ) {
 			$response = $this->gateway->execute( "locations/{$this->location_id}/transactions/{$transaction_id}/void", $params, null );
-			
+
 			if ( is_wp_error( $response ) ) {
 				throw new Exception( $response->get_error_message() );
 			}
-			
+
 			$this->log->set( 'sq_order_status', 'Voided' )->save();
 			$this->log->set( 'square-status', 'Authorization voided ' )->save();
 			$this->log->set( 'processed'      , WPSC_Purchase_Log::INCOMPLETE_SALE )->save();
 		}
     }
-	
+
     /**
      * Refund payment
      *
@@ -612,13 +618,13 @@ class WPSC_Square_Payments_Order_Handler {
 					'currency'	=> strtoupper( $this->get_currency_code() ),
 				),				
 			);
-			
+
 			$response = $this->gateway->execute( "locations/{$this->location_id}/transactions/{$transaction_id}/refund", $params );
 			
 			if ( is_wp_error( $response ) ) {
 				throw new Exception( $response->get_error_message() );
 			}
-			
+
 			wpsc_add_purchase_meta( $this->log->get( 'id' ), 'square_refunded', true );
 			wpsc_add_purchase_meta( $this->log->get( 'id' ), 'square_refund_id', $response['ResponseBody']->refund->id );
 			$this->log->set( 'square-status', sprintf( __( 'Refunded (Transaction ID: %s)', 'wp-e-commerce' ), $response['ResponseBody']->refund->id ) )->save();
@@ -626,7 +632,7 @@ class WPSC_Square_Payments_Order_Handler {
 			$this->log->set( 'sq_order_status', 'Refunded' )->save();
 		}
     }
-	
+
     /**
      * Capture authorized payment
      *
