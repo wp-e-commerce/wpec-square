@@ -20,7 +20,7 @@ class WPSC_Payment_Gateway_Square_Payments extends WPSC_Payment_Gateway {
 		$this->endpoint			= $this->sandbox ? $this->endpoints['sandbox'] : $this->endpoints['production'];
 		$this->payment_capture 	= $this->setting->get( 'payment_capture' ) !== null ? $this->setting->get( 'payment_capture' ) : '';
 		$this->order_handler	= WPSC_Square_Payments_Order_Handler::get_instance( $this );
-		
+
 		// Define user set variables
 		$this->app_id			= $this->setting->get( 'app_id' );
 		$this->location_id		= $this->setting->get( 'location_id' );
@@ -31,7 +31,7 @@ class WPSC_Payment_Gateway_Square_Payments extends WPSC_Payment_Gateway {
 		parent::init();
 
 		add_action( 'wp_enqueue_scripts', array( $this, 'square_scripts' ) );
-		add_action( 'wp_head'	, array( $this, 'footer_script' ) );
+		add_action( 'wp_head'	, array( $this, 'head_script' ) );
 
 		// Add hidden field to hold token value
 		add_action( 'wpsc_inside_shopping_cart', array( $this, 'te_v1_insert_hidden_field' ) );
@@ -85,7 +85,7 @@ class WPSC_Payment_Gateway_Square_Payments extends WPSC_Payment_Gateway {
 	 */
 	public function square_scripts() {
  		$is_cart = wpsc_is_theme_engine( '1.0' ) ? wpsc_is_checkout() : ( wpsc_is_checkout() || wpsc_is_cart() );
-
+ 
         if ( ! $is_cart ) {
             return;
         }
@@ -93,9 +93,9 @@ class WPSC_Payment_Gateway_Square_Payments extends WPSC_Payment_Gateway {
 		wp_enqueue_script( 'squareup', 'https://js.squareup.com/v2/paymentform' );
 	}
 
-	public function footer_script() {
+	public function head_script() {
  		$is_cart = wpsc_is_theme_engine( '1.0' ) ? wpsc_is_checkout() : ( wpsc_is_checkout() || wpsc_is_cart() );
- 
+
         if ( ! $is_cart ) {
             return;
         }
@@ -322,7 +322,7 @@ class WPSC_Payment_Gateway_Square_Payments extends WPSC_Payment_Gateway {
 				'idempotency_key' 	=> uniqid(),
 				'delay_capture'		=> $preauth,
 			);
-
+			
 			$response = $this->execute( "locations/{$this->location_id}/transactions", $params );
 
 			if( isset( $response['ResponseBody']->errors ) ) {
@@ -338,7 +338,7 @@ class WPSC_Payment_Gateway_Square_Payments extends WPSC_Payment_Gateway {
 			// Set order status based on the charge being auth or not
 			$order_status = $preauth === true ? 'Open' : 'Completed';		
 			$order->set( 'sq_order_status' , $order_status )->save();
-			
+
 			return true;
 		}
 		return false;
@@ -358,7 +358,6 @@ class WPSC_Payment_Gateway_Square_Payments extends WPSC_Payment_Gateway {
 			'sslverify' => false,
 			'body'      => $data,
 		);
-		
 		$request  = $type == 'GET' ? wp_safe_remote_get( $endpoint, $args ) : wp_safe_remote_post( $endpoint, $args );
         $response = wp_remote_retrieve_body( $request );
 
@@ -377,15 +376,15 @@ class WPSC_Square_Payments_Order_Handler {
 	public $log;
 	public $gateway;
 
+	/**
+	 * Constructor
+	 */
 	public function __construct( &$gateway ) {
 		$this->log     = $gateway->purchase_log;
 		$this->gateway = $gateway;
 		$this->init();
 	}
 
-	/**
-	 * Constructor
-	 */
 	public function init() {
 		add_action( 'wpsc_purchlogitem_metabox_start', array( $this, 'meta_box' ), 8 );
 		add_action( 'wp_ajax_square_order_action'  , array( $this, 'order_actions' ) );
@@ -438,7 +437,7 @@ class WPSC_Square_Payments_Order_Handler {
 	function meta_box( $log_id ) {
 		$this->set_purchase_log( $log_id );
 		$gateway = $this->log->get( 'gateway' );
-
+		
 		if ( $gateway == 'square-payments' ) {
 			$this->authorization_box();
 		}
@@ -508,6 +507,7 @@ class WPSC_Square_Payments_Order_Handler {
 			case 'Refunded' :
 			break;
 		}
+
 		if ( ! empty( $actions ) ) {
 			echo '<p class="buttons">';
 			foreach ( $actions as $action_name => $action ) {
@@ -620,7 +620,7 @@ class WPSC_Square_Payments_Order_Handler {
 			);
 
 			$response = $this->gateway->execute( "locations/{$this->location_id}/transactions/{$transaction_id}/refund", $params );
-			
+
 			if ( is_wp_error( $response ) ) {
 				throw new Exception( $response->get_error_message() );
 			}
