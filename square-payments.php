@@ -84,24 +84,22 @@ class WPSC_Payment_Gateway_Square_Payments extends WPSC_Payment_Gateway {
 	 * Add scripts
 	 */
 	public function square_scripts() {
-		$is_tev2_payment_page = ! empty( $r ) && 'wpsc-checkout-form' === $r['id'] && 'payment' === _wpsc_get_current_controller_slug();
-        $is_tev1_payment_page = empty( $r );
+ 		$is_cart = wpsc_is_theme_engine( '1.0' ) ? wpsc_is_checkout() : ( wpsc_is_checkout() || wpsc_is_cart() );
  
-        if ( ! $is_tev1_payment_page && ! $is_tev2_payment_page ) {
+        if ( ! $is_cart ) {
             return;
         }
-		
+
 		wp_enqueue_script( 'squareup', 'https://js.squareup.com/v2/paymentform' );
 	}
 	
 	public function footer_script() {
-		$is_tev2_payment_page = ! empty( $r ) && 'wpsc-checkout-form' === $r['id'] && 'payment' === _wpsc_get_current_controller_slug();
-        $is_tev1_payment_page = empty( $r );
+ 		$is_cart = wpsc_is_theme_engine( '1.0' ) ? wpsc_is_checkout() : ( wpsc_is_checkout() || wpsc_is_cart() );
  
-        if ( ! $is_tev1_payment_page && ! $is_tev2_payment_page ) {
+        if ( ! $is_cart ) {
             return;
         }
-		
+
 		?>
 		<style type="text/css">
 		.square-card {
@@ -271,8 +269,7 @@ class WPSC_Payment_Gateway_Square_Payments extends WPSC_Payment_Gateway {
 					$order->set( 'square-status', __( 'Square order opened. Capture the payment below. Authorized payments must be captured within 6 days.', 'wp-e-commerce' ) )->save();
 				} else {
 					$order->set( 'processed', WPSC_Purchase_Log::PAYMENT_DECLINED )->save();
-					$this->handle_declined_transaction( $order );
-				}
+					}
 			break;
 			default:
 				// Capture
@@ -282,7 +279,6 @@ class WPSC_Payment_Gateway_Square_Payments extends WPSC_Payment_Gateway {
 					$order->set( 'square-status', __( 'Square order completed.  Funds have been authorized and captured.', 'wp-e-commerce' ) );
 				} else {
 					$order->set( 'processed'      , WPSC_Purchase_Log::PAYMENT_DECLINED );
-					$this->handle_declined_transaction( $order );
 				}
 			break;
 		}
@@ -291,29 +287,6 @@ class WPSC_Payment_Gateway_Square_Payments extends WPSC_Payment_Gateway {
 		$this->go_to_transaction_results();
 	}
 
-	/**
-	 * Handles declined transactions from Square.
-	 *
-	 * On the front-end, if a transaction is declined due to an invalid payment method, the user needs
-	 * to be returned to the payment page to select a different method.
-	 *
-	 *
-	 * @since  4.0
-	 *
-	 * @param  WPSC_Purchase_Log $order Current purchase log for transaction.
-	 * @return void
-	 */
-	private function handle_declined_transaction( $order ) {
-		$error_message = $order->get( 'square-status' );
-
-		$url     = wpsc_get_cart_url();
-
-		WPSC_Message_Collection::get_instance()->add( $error_message, 'error', 'main', 'flash' );
-		wp_safe_redirect( $url );
-
-		exit;
-	}
-	
 	public function capture_payment( $card_token, $preauth = false ) {
 		if ( $this->purchase_log->get( 'gateway' ) == 'square-payments' ) {
 			$order = $this->purchase_log;
@@ -342,6 +315,8 @@ class WPSC_Payment_Gateway_Square_Payments extends WPSC_Payment_Gateway {
 			
 			$response = $this->execute( "locations/{$this->location_id}/transactions", $params );
 
+			var_dump($response);
+			exit;
 			if( isset( $response['ResponseBody']->errors ) ) {
 				$order->set( 'square-status', $response['ResponseBody']->errors[0]->detail );
 				return false;
