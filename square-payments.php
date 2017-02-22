@@ -194,69 +194,69 @@ class WPSC_Payment_Gateway_Square_Payments extends WPSC_Payment_Gateway {
 		<!-- Account Credentials -->
 		<tr>
 			<td colspan="2">
-				<h4><?php _e( 'Account Credentials', 'wp-e-commerce' ); ?></h4>
+				<h4><?php _e( 'Account Credentials', 'wpec-square' ); ?></h4>
 			</td>
 		</tr>
 		<tr>
 			<td>
-				<label for="wpsc-worldpay-secure-net-id"><?php _e( 'Application ID', 'wp-e-commerce' ); ?></label>
+				<label for="wpsc-worldpay-secure-net-id"><?php _e( 'Application ID', 'wpec-square' ); ?></label>
 			</td>
 			<td>
 				<input type="text" name="<?php echo esc_attr( $this->setting->get_field_name( 'app_id' ) ); ?>" value="<?php echo esc_attr( $this->setting->get( 'app_id' ) ); ?>" id="wpsc-worldpay-secure-net-id" />
-				<br><span class="small description"><?php _e( 'Application ID.', 'wp-e-commerce' ); ?></span>
+				<br><span class="small description"><?php _e( 'Application ID.', 'wpec-square' ); ?></span>
 			</td>
 		</tr>
 		<tr>
 			<td>
-				<label for="wpsc-worldpay-secure-key"><?php _e( 'Access Token', 'wp-e-commerce' ); ?></label>
+				<label for="wpsc-worldpay-secure-key"><?php _e( 'Access Token', 'wpec-square' ); ?></label>
 			</td>
 			<td>
 				<input type="text" name="<?php echo esc_attr( $this->setting->get_field_name( 'acc_token' ) ); ?>" value="<?php echo esc_attr( $this->setting->get( 'acc_token' ) ); ?>" id="wpsc-worldpay-secure-key" />
-				<br><span class="small description"><?php _e( 'Access token.', 'wp-e-commerce' ); ?></span>
+				<br><span class="small description"><?php _e( 'Access token.', 'wpec-square' ); ?></span>
 			</td>
 		</tr>
 		<tr>
 			<td>
-				<label for="wpsc-worldpay-secure-key"><?php _e( 'Location ID', 'wp-e-commerce' ); ?></label>
+				<label for="wpsc-worldpay-secure-key"><?php _e( 'Location ID', 'wpec-square' ); ?></label>
 			</td>
 			<td>
 				<input type="text" name="<?php echo esc_attr( $this->setting->get_field_name( 'location_id' ) ); ?>" value="<?php echo esc_attr( $this->setting->get( 'location_id' ) ); ?>" id="wpsc-worldpay-secure-key" />
-				<br><span class="small description"><?php _e( 'Store Location ID.', 'wp-e-commerce' ); ?></span>
+				<br><span class="small description"><?php _e( 'Store Location ID.', 'wpec-square' ); ?></span>
 			</td>
 		</tr>
 		<tr>
 			<td>
-				<label for="wpsc-worldpay-payment-capture"><?php _e( 'Payment Capture', 'wp-e-commerce' ); ?></label>
+				<label for="wpsc-worldpay-payment-capture"><?php _e( 'Payment Capture', 'wpec-square' ); ?></label>
 			</td>
 			<td>
 				<select id="wpsc-worldpay-payment-capture" name="<?php echo esc_attr( $this->setting->get_field_name( 'payment_capture' ) ); ?>">
-					<option value='' <?php selected( '', $this->setting->get( 'payment_capture' ) ); ?>><?php _e( 'Authorize and capture the payment when the order is placed.', 'wp-e-commerce' )?></option>
-					<option value='authorize' <?php selected( 'authorize', $this->setting->get( 'payment_capture' ) ); ?>><?php _e( 'Authorize the payment when the order is placed.', 'wp-e-commerce' )?></option>
+					<option value='' <?php selected( '', $this->setting->get( 'payment_capture' ) ); ?>><?php _e( 'Authorize and capture the payment when the order is placed.', 'wpec-square' )?></option>
+					<option value='authorize' <?php selected( 'authorize', $this->setting->get( 'payment_capture' ) ); ?>><?php _e( 'Authorize the payment when the order is placed.', 'wpec-square' )?></option>
 				</select>
 			</td>
 		</tr>
 		<tr>
 			<td>
-				<label><?php _e( 'Sandbox Mode', 'wp-e-commerce' ); ?></label>
+				<label><?php _e( 'Sandbox Mode', 'wpec-square' ); ?></label>
 			</td>
 			<td>
-				<label><input <?php checked( $this->setting->get( 'sandbox_mode' ) ); ?> type="radio" name="<?php echo esc_attr( $this->setting->get_field_name( 'sandbox_mode' ) ); ?>" value="1" /> <?php _e( 'Yes', 'wp-e-commerce' ); ?></label>&nbsp;&nbsp;&nbsp;
-				<label><input <?php checked( (bool) $this->setting->get( 'sandbox_mode' ), false ); ?> type="radio" name="<?php echo esc_attr( $this->setting->get_field_name( 'sandbox_mode' ) ); ?>" value="0" /> <?php _e( 'No', 'wp-e-commerce' ); ?></label>
+				<label><input <?php checked( $this->setting->get( 'sandbox_mode' ) ); ?> type="radio" name="<?php echo esc_attr( $this->setting->get_field_name( 'sandbox_mode' ) ); ?>" value="1" /> <?php _e( 'Yes', 'wpec-square' ); ?></label>&nbsp;&nbsp;&nbsp;
+				<label><input <?php checked( (bool) $this->setting->get( 'sandbox_mode' ), false ); ?> type="radio" name="<?php echo esc_attr( $this->setting->get_field_name( 'sandbox_mode' ) ); ?>" value="0" /> <?php _e( 'No', 'wpec-square' ); ?></label>
 			</td>
 		</tr>
 		<!-- Error Logging -->
 		<tr>
 			<td colspan="2">
-				<h4><?php _e( 'Error Logging', 'wp-e-commerce' ); ?></h4>
+				<h4><?php _e( 'Error Logging', 'wpec-square' ); ?></h4>
 			</td>
 		</tr>
 		<tr>
 			<td>
-				<label><?php _e( 'Enable Debugging', 'wp-e-commerce' ); ?></label>
+				<label><?php _e( 'Enable Debugging', 'wpec-square' ); ?></label>
 			</td>
 			<td>
-				<label><input <?php checked( $this->setting->get( 'debugging' ) ); ?> type="radio" name="<?php echo esc_attr( $this->setting->get_field_name( 'debugging' ) ); ?>" value="1" /> <?php _e( 'Yes', 'wp-e-commerce' ); ?></label>&nbsp;&nbsp;&nbsp;
-				<label><input <?php checked( (bool) $this->setting->get( 'debugging' ), false ); ?> type="radio" name="<?php echo esc_attr( $this->setting->get_field_name( 'debugging' ) ); ?>" value="0" /> <?php _e( 'No', 'wp-e-commerce' ); ?></label>
+				<label><input <?php checked( $this->setting->get( 'debugging' ) ); ?> type="radio" name="<?php echo esc_attr( $this->setting->get_field_name( 'debugging' ) ); ?>" value="1" /> <?php _e( 'Yes', 'wpec-square' ); ?></label>&nbsp;&nbsp;&nbsp;
+				<label><input <?php checked( (bool) $this->setting->get( 'debugging' ), false ); ?> type="radio" name="<?php echo esc_attr( $this->setting->get_field_name( 'debugging' ) ); ?>" value="0" /> <?php _e( 'No', 'wpec-square' ); ?></label>
 			</td>
 		</tr>
 <?php
@@ -280,7 +280,7 @@ class WPSC_Payment_Gateway_Square_Payments extends WPSC_Payment_Gateway {
 				$result = $this->capture_payment( $card_token, true );
 				if ( $result ) {
 					// Mark as on-hold
-					$order->set( 'square-status', __( 'Square order opened. Capture the payment below. Authorized payments must be captured within 6 days.', 'wp-e-commerce' ) )->save();
+					$order->set( 'square-status', __( 'Square order opened. Capture the payment below. Authorized payments must be captured within 6 days.', 'wpec-square' ) )->save();
 				} else {
 					$order->set( 'processed', WPSC_Purchase_Log::PAYMENT_DECLINED )->save();
 					}
@@ -291,7 +291,7 @@ class WPSC_Payment_Gateway_Square_Payments extends WPSC_Payment_Gateway {
 				$result = $this->capture_payment( $card_token );
 				if ( $result ) {
 					// Payment complete
-					$order->set( 'square-status', __( 'Square order completed.  Funds have been authorized and captured.', 'wp-e-commerce' ) );
+					$order->set( 'square-status', __( 'Square order completed.  Funds have been authorized and captured.', 'wpec-square' ) );
 				} else {
 					$order->set( 'processed'      , WPSC_Purchase_Log::PAYMENT_DECLINED );
 				}
@@ -469,15 +469,15 @@ class WPSC_Square_Payments_Order_Handler {
 
 		<div class="metabox-holder">
 			<div id="wpsc-square-payments" class="postbox">
-				<h3 class='hndle'><?php _e( 'Square Payments' , 'wp-e-commerce' ); ?></h3>
+				<h3 class='hndle'><?php _e( 'Square Payments' , 'wpec-square' ); ?></h3>
 				<div class='inside'>
 					<p><?php
-							_e( 'Current status: ', 'wp-e-commerce' );
+							_e( 'Current status: ', 'wpec-square' );
 							echo wp_kses_data( $this->log->get( 'square-status' ) );
 						?>
 					</p>
 					<p><?php
-							_e( 'Transaction ID: ', 'wp-e-commerce' );
+							_e( 'Transaction ID: ', 'wpec-square' );
 							echo wp_kses_data( $sq_transactionid );
 						?>
 					</p>
@@ -488,14 +488,14 @@ class WPSC_Square_Payments_Order_Handler {
 				//Order is only authorized and still not captured/voided
 				$actions['capture'] = array(
 					'id'     => $sq_transactionid,
-					'button' => __( 'Capture funds', 'wp-e-commerce' )
+					'button' => __( 'Capture funds', 'wpec-square' )
 				);
 				//
 				if ( ! $order_info['settled'] ) {
 					//Void
 					$actions['void'] = array(
 						'id'     => $sq_transactionid,
-						'button' => __( 'Void order', 'wp-e-commerce' )
+						'button' => __( 'Void order', 'wpec-square' )
 					);
 				}
 				break;
@@ -505,7 +505,7 @@ class WPSC_Square_Payments_Order_Handler {
 					//Refund
 					$actions['refund'] = array(
 						'id'     => $sq_transactionid,
-						'button' => __( 'Refund order', 'wp-e-commerce' )
+						'button' => __( 'Refund order', 'wpec-square' )
 					);
 				}
 			break;
@@ -632,7 +632,7 @@ class WPSC_Square_Payments_Order_Handler {
 
 			wpsc_add_purchase_meta( $this->log->get( 'id' ), 'square_refunded', true );
 			wpsc_add_purchase_meta( $this->log->get( 'id' ), 'square_refund_id', $response['ResponseBody']->refund->id );
-			$this->log->set( 'square-status', sprintf( __( 'Refunded (Transaction ID: %s)', 'wp-e-commerce' ), $response['ResponseBody']->refund->id ) )->save();
+			$this->log->set( 'square-status', sprintf( __( 'Refunded (Transaction ID: %s)', 'wpec-square' ), $response['ResponseBody']->refund->id ) )->save();
 			$this->log->set( 'processed'      , WPSC_Purchase_Log::REFUNDED )->save();
 			$this->log->set( 'sq_order_status', 'Refunded' )->save();
 		}
