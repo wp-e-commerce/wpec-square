@@ -15,7 +15,7 @@ class WPSC_Payment_Gateway_Square_Payments extends WPSC_Payment_Gateway {
 		parent::__construct();
 
 		$this->title 			= __( 'Square', 'wpsc' );
-		$this->supports 		= array( 'default_credit_card_form', 'tev1' );
+		$this->supports 		= array( 'default_credit_card_form', 'tev1', 'tokenization' );
 		$this->sandbox			= $this->setting->get( 'sandbox_mode' ) == '1' ? true : false;
 		$this->endpoint			= $this->sandbox ? $this->endpoints['sandbox'] : $this->endpoints['production'];
 		$this->payment_capture 	= $this->setting->get( 'payment_capture' ) !== null ? $this->setting->get( 'payment_capture' ) : '';
@@ -174,9 +174,14 @@ class WPSC_Payment_Gateway_Square_Payments extends WPSC_Payment_Gateway {
 
 			jQuery( document ).ready( function( $ ) {
 				$( '#wpsc-checkout-form, .wpsc_checkout_forms' ).on( 'submit', function( e ) {
-					e.preventDefault();
-					$(this).off();
-					sqPaymentForm.requestCardNonce();
+					if (
+						$( 'input[name="wpsc_payment_method"]:checked' ).val() === 'square-payments' ||
+						$( 'input[name="custom_gateway"]:checked' ).val() === 'square-payments'
+					) {
+						e.preventDefault();
+						$(this).off();
+						sqPaymentForm.requestCardNonce();
+					}
 				});
 
 			});
