@@ -38,8 +38,8 @@ class WPSC_Payment_Gateway_Square_Payments extends WPSC_Payment_Gateway {
 		add_action( 'wpsc_default_credit_card_form_end', array( $this, 'te_v2_insert_hidden_field' ) );
 
 		// Add extra zip field to card data for TeV1
-		add_action( 'wpsc_tev1_default_credit_card_form_end', array( $this, 'tev1_add_billing_card_zip' ) );
-		add_filter( 'wpsc_default_credit_card_form_fields', array( $this, 'tev2_add_billing_card_zip' ), 10, 2 );
+		add_action( 'wpsc_tev1_default_credit_card_form_end_square-payments', array( $this, 'tev1_add_billing_card_zip' ) );
+		add_filter( 'wpsc_default_credit_card_form_end-square-payments', array( $this, 'tev2_add_billing_card_zip' ), 10, 2 );
 	}
 
 	/**
